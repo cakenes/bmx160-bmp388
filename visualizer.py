@@ -6,10 +6,21 @@ import pygame
 from pygame.locals import *
 import serial
 import math
+import time
 
 ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)
 ax = ay = az = 0.0
-last_read = 0.0
+
+timestamp = 0
+accel_x = accel_y = accel_z = 0.0
+gyro_x = gyro_y = gyro_z = 0.0
+mag_x = mag_y = mag_z = 0.0
+
+timestamp = last_timestamp = rolling_avg_read_frequency = 0
+last_pitch = last_roll = last_yaw = 0.0
+
+GYRO_WEIGHT = 0.95
+DELTA_WEIGHT = 0.05
 
 def resize(width, height):
     glViewport(0, 0, width, height)
@@ -41,10 +52,20 @@ def draw():
     glLoadIdentity()
     glTranslatef(0,0.0,-7.0)
 
-    osd_text = "pitch: " + str("{0:.2f}".format(ay)) + ", roll: " + str("{0:.2f}".format(ax) + " Press R to reset orientation")
-    drawText((-2,-2, 2), osd_text)
+    osd_text = "X: " + str(ax) + ", Y: " + str(ay) + ", Z: " + str(az)
+    drawText((-3.5,-1.0, 2), osd_text)
+    osd_text = "MagX: " + str(mag_x) + ", MagY: " + str(mag_y) + ", MagZ: " + str(mag_z)
+    drawText((-3.5,-1.2, 2), osd_text)
+    osd_text = "GyroX: " + str(gyro_x) + ", GyroY: " + str(gyro_y) + ", GyroZ: " + str(gyro_z)
+    drawText((-3.5,-1.4, 2), osd_text)
+    osd_text = "AccelX: " + str(accel_x) + ", AccelY: " + str(accel_y) + ", AccelZ: " + str(accel_z)
+    drawText((-3.5,-1.6, 2), osd_text)
+    osd_text = "C: Calibrate, R: Reset orientation, Esc: Quit."
+    drawText((-3.5,-1.8, 2), osd_text)
+    osd_text = "1: 100hz, 2: 80hz, 3: 50hz, 4: 10hz, Current Frequency: " + str(rolling_avg_read_frequency) + "hz"
+    drawText((-3.5,-2, 2), osd_text)
 
-    glRotatef(0.0, 0.0, 1.0, 0.0)
+    glRotatef(0, 0.0, 1.0, 0.0)
     glRotatef(ay ,1.0,0.0,0.0)
     glRotatef(-1*ax ,0.0,0.0,1.0)
 
@@ -88,44 +109,111 @@ def draw():
          
 def read_data():
     global ax, ay, az
-    global last_read
+    global timestamp
+    global accel_x, accel_y, accel_z
+    global gyro_x, gyro_y, gyro_z
+    global mag_x, mag_y, mag_z
+    global last_timestamp, last_pitch, last_roll, last_yaw
     line = ser.readline()
     if line:
-        decoded_line = line.decode("utf-8")
+        decoded_line = line.decode("utf-8").strip()
         angles = decoded_line.split(":")
         if len(angles) == 13:
-            if last_read != float(angles[0]):
-                last_read = float(angles[0])
-                # pitch = math.atan2(float(angles[7]), math.sqrt(float(angles[8]) ** 2 + float(angles[9]) ** 2))
-                # roll = math.atan2(float(angles[8]), math.sqrt(float(angles[7]) ** 2 + float(angles[9]) ** 2))
-                # yaw = math.atan2(math.sqrt(float(angles[7]) ** 2 + float(angles[8]) ** 2), float(angles[9]))
-                # pitch_degrees = math.degrees(pitch)
-                # roll_degrees = math.degrees(roll)
-                # yaw_degrees = math.degrees(yaw)
-                # ax += (float(angles[4]) / 10 * 0.96) + (pitch_degrees / 10 * 0.04)
-                # ay += (float(angles[5]) / 10 * 0.96) + (roll_degrees / 10 * 0.04)
-                # az += (float(angles[6]) / 10 * 0.96) + (yaw_degrees / 10 * 0.04)
-                ax += (float(angles[4]) / 12)
-                ay += (float(angles[5]) / 12)
-                az += (float(angles[6]) / 12)
+            timestamp = float(angles[0])
+            accel_x = float(angles[1])
+            accel_y = float(angles[2])
+            accel_z = float(angles[3])
+            gyro_x = float(angles[4])
+            gyro_y = float(angles[5])
+            gyro_z = float(angles[6])
+            mag_x = float(angles[7])
+            mag_y = float(angles[8])
+            mag_z = float(angles[9])
+            time_elapsed = (timestamp - last_timestamp) / 1_000_000.0
+            last_timestamp = timestamp
+
+
+            pitch = math.atan2(-mag_x, mag_z)
+            roll = math.atan2(mag_y, mag_z)
+            pitch_degrees = math.degrees(pitch)
+            roll_degrees = math.degrees(roll)
+
+            delta_pitch = (pitch_degrees - last_pitch) * time_elapsed
+            delta_roll = (roll_degrees - last_roll) * time_elapsed
+
+            ay += (gyro_y * GYRO_WEIGHT - delta_roll * DELTA_WEIGHT)
+            ax -= (gyro_x * GYRO_WEIGHT + delta_pitch * DELTA_WEIGHT)
+            az += (gyro_z)
+
+            last_pitch = pitch_degrees
+            last_roll = roll_degrees
+
+            # Original calculation of pitch, roll, and yaw
+            # pitch = math.atan2(float(angles[8]), math.sqrt(float(angles[7])**2 + float(angles[9])**2))
+            # roll = math.atan2(float(angles[7]), math.sqrt(float(angles[8])**2 + float(angles[9])**2))
+            # yaw = math.atan2(float(angles[2]), float(angles[1])) * (180 / math.pi)
+
+            # pitch_degrees = math.degrees(pitch)
+            # roll_degrees = math.degrees(roll)
+            # yaw_degrees = math.degrees(yaw)
+
+            # Calculate the change in angles
+            # delta_pitch = (pitch_degrees - last_pitch) * time_elapsed
+            # delta_roll = (roll_degrees - last_roll) * time_elapsed
+            # delta_yaw = (yaw_degrees - last_yaw) * time_elapsed
+
+            # Update ax, ay, az based on the change and time elapsed
+            # ay += (gyro_y * GYRO_WEIGHT - delta_roll * DELTA_WEIGHT)
+            # ax += (gyro_x * GYRO_WEIGHT + delta_pitch * DELTA_WEIGHT)
+            # az += (gyro_z)
+
+            # Update last_pitch, last_roll, last_yaw
+            # last_pitch = pitch_degrees
+            # last_roll = roll_degrees
+            # last_yaw = yaw_degrees
 
 def main():
-    global ax, ay, az
+    global ax, ay, az, rolling_avg_read_frequency
     video_flags = OPENGL|DOUBLEBUF
     pygame.init()
     screen = pygame.display.set_mode((920,480), video_flags)
     resize(920,480)
     init()
+    read_count = 0
+    start_time = time.time()
+    read_counts = []
+
     while 1:
+        read_count += 1
+        if time.time() - start_time >= 1:
+            read_counts.append(read_count)
+            if len(read_counts) > 10:
+                read_counts.pop(0)
+            
+            rolling_avg_read_frequency = sum(read_counts) / len(read_counts)
+            read_count = 0
+            start_time = time.time()
+
         event = pygame.event.poll()
         if event.type == QUIT or (event.type == KEYDOWN and event.key == K_ESCAPE):
             pygame.quit()
             break 
         if event.type == KEYDOWN and event.key == K_r:
             ax = ay = az = 0.0
+        elif event.type == KEYDOWN and event.key == K_c:
+            ser.write(b'calibrate:100\n')
+        elif event.type == KEYDOWN and event.key == K_1:
+            ser.write(b'frequency:100\n')
+        elif event.type == KEYDOWN and event.key == K_2:
+            ser.write(b'frequency:80\n')
+        elif event.type == KEYDOWN and event.key == K_3:
+            ser.write(b'frequency:50\n')
+        elif event.type == KEYDOWN and event.key == K_4:
+            ser.write(b'frequency:10\n')
         read_data()
         draw()
         pygame.display.flip()
+
     ser.close()
 
 if __name__ == '__main__': main()
