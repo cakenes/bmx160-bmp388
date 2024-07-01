@@ -6,13 +6,16 @@
 DFRobot_BMX160 bmx160;
 DFRobot_BMP388_I2C bmp388(&Wire, bmp388.eSDOGND);
 
-int running = 1;
-int frequency = 80;
+typedef struct {
+    sBmx160SensorData_t imu[3];
+    float baro[3];
+} Sensor;
+
+int run = 0;
+int frequency = 10;
 int cumulative = 1;
 float sensitivity[2] = {16384.0, 10};
-sBmx160SensorData_t offset[2];
-sBmx160SensorData_t imu[3];
-float baro[3];
+Sensor offset;
 
 void setup() {
   Serial.begin(115200);
@@ -43,7 +46,7 @@ void split(String data, String* result) {
 }
 
 void read(String* data) {
-  if (data[0] == "running") { running = data[1].toInt(); }
+  if (data[0] == "run") { run = data[1].toInt(); }
   else if (data[0] == "frequency") { frequency = data[1].toInt(); }
   else if (data[0] == "cumulative") { cumulative = data[1].toInt(); }
   else if (data[0] == "accelSens") { sensitivity[0] = data[1].toFloat(); }
@@ -55,17 +58,15 @@ void read(String* data) {
 }
 
 void calibrate(int count) {
-  sBmx160SensorData_t temp[2];
-
-  float x, y, z = 0;
+  Sensor temp;
 
   for (int i = 0; i < count; i++) {
     unsigned long start = micros();
-    bmx160.getAllData(&offset[0], &offset[1], NULL);
+    bmx160.getAllData(&offset.imu[0], &offset.imu[1], NULL);
     for (int i = 0; i < 2; i++) {
-      temp[i].x += offset[i].x;
-      temp[i].y += offset[i].y;
-      temp[i].z += offset[i].z;
+      temp.imu[i].x += offset.imu[i].x;
+      temp.imu[i].y += offset.imu[i].y;
+      temp.imu[i].z += offset.imu[i].z;
     }
 
     unsigned long end = micros();
@@ -75,38 +76,39 @@ void calibrate(int count) {
   }
 
   for (int i = 0; i < 2; i++) {
-    offset[i].x = temp[i].x / count;
-    offset[i].y = temp[i].y / count;
-    offset[i].z = temp[i].z / count;
+    offset.imu[i].x = temp.imu[i].x / count;
+    offset.imu[i].y = temp.imu[i].y / count;
+    offset.imu[i].z = temp.imu[i].z / count;
   }
 
   Serial.println("Calibration done");
 }
 
-void sensors(sBmx160SensorData_t* imu, float* baro) {
-  bmx160.getAllData(&imu[0], &imu[1], &imu[2]);
-  baro[0] = bmp388.readTempC();
-  baro[1] = bmp388.readPressPa();
-  baro[2] = bmp388.readAltitudeM();
+void sensors(Sensor* sensor) {
+  bmx160.getAllData(&sensor->imu[0], &sensor->imu[1], &sensor->imu[2]);
+  sensor->baro[0] = bmp388.readTempC();
+  sensor->baro[1] = bmp388.readPressPa();
+  sensor->baro[2] = bmp388.readAltitudeM();
 }
 
-void print(unsigned long time, sBmx160SensorData_t imu[], float baro[]) {
-  Serial.print(time); Serial.print(":");                                            // [0] time
-  Serial.print((imu[0].x - offset[0].x) / sensitivity[0], 7); Serial.print(":");    // [1] accel x
-  Serial.print((imu[0].y - offset[0].y) / sensitivity[0], 7); Serial.print(":");    // [2] accel y
-  Serial.print((imu[0].z - offset[0].z) / sensitivity[0], 7); Serial.print(":");    // [3] accel z
-  Serial.print((imu[1].x - offset[1].x) / sensitivity[1], 7); Serial.print(":");    // [4] gyro x
-  Serial.print((imu[1].y - offset[1].y) / sensitivity[1], 7); Serial.print(":");    // [5] gyro y
-  Serial.print((imu[1].z - offset[1].z) / sensitivity[1], 7); Serial.print(":");    // [6] gyro z
-  Serial.print(imu[2].x, 7); Serial.print(":");                                     // [7] mag x
-  Serial.print(imu[2].y, 7); Serial.print(":");                                     // [8] mag y
-  Serial.print(imu[2].z, 7); Serial.print(":");                                     // [9] mag z
-  Serial.print(baro[0], 7); Serial.print(":");                                      // [10] temp
-  Serial.print(baro[1], 7); Serial.print(":");                                      // [11] pressure
-  Serial.println(baro[2], 7);                                                       // [12] altitude
+void print(unsigned long time, Sensor* sensor) {
+  Serial.print(time); Serial.print(":");                                                        // [0] time
+  Serial.print((sensor->imu[0].x - offset.imu[0].x) / sensitivity[0], 7); Serial.print(":");    // [1] accel x
+  Serial.print((sensor->imu[0].y - offset.imu[0].y) / sensitivity[0], 7); Serial.print(":");    // [2] accel y
+  Serial.print((sensor->imu[0].z - offset.imu[0].z) / sensitivity[0], 7); Serial.print(":");    // [3] accel z
+  Serial.print((sensor->imu[1].x - offset.imu[1].x) / sensitivity[1], 7); Serial.print(":");    // [4] gyro x
+  Serial.print((sensor->imu[1].y - offset.imu[1].y) / sensitivity[1], 7); Serial.print(":");    // [5] gyro y
+  Serial.print((sensor->imu[1].z - offset.imu[1].z) / sensitivity[1], 7); Serial.print(":");    // [6] gyro z
+  Serial.print(sensor->imu[2].x, 7); Serial.print(":");                                         // [7] mag x
+  Serial.print(sensor->imu[2].y, 7); Serial.print(":");                                         // [8] mag y
+  Serial.print(sensor->imu[2].z, 7); Serial.print(":");                                         // [9] mag z
+  Serial.print(sensor->baro[0], 7); Serial.print(":");                                          // [10] temp
+  Serial.print(sensor->baro[1], 7); Serial.print(":");                                          // [11] pressure
+  Serial.println(sensor->baro[2], 7);                                                           // [12] altitude
 }
 
 void loop(){
+  Sensor temp;
   unsigned long start = micros();
 
   if (Serial.available() > 0) {
@@ -116,10 +118,10 @@ void loop(){
     read(splitData);
   }
 
-  if (running == 0) return delay(1000);
-
-  sensors(imu, baro);
-  print(start, imu, baro);
+  if (run == 1) {
+    sensors(&temp);
+    print(start, &temp);
+  }
 
   unsigned long end = micros();
   unsigned long elapsed = end - start;
