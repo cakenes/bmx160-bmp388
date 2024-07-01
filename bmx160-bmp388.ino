@@ -5,13 +5,15 @@
 DFRobot_BMX160 bmx160;
 DFRobot_BMP388_I2C bmp388(&Wire, bmp388.eSDOGND);
 
-float calibratedAlt = 0;
+int running = 1;
+unsigned long interval = 1000000 / 200;
+unsigned long previousTime = 0;
 
 void setup() {
   Serial.begin(115200);
-  delay(100);
-
   Wire.begin(2, 0);
+
+  delay(100);
 
   if (bmp388.begin() != 0) {
     Serial.println("bmp388 init failed");
@@ -23,45 +25,56 @@ void setup() {
     while (1);
   }
 
-  calibratedAlt = bmp388.readAltitudeM();
-
   delay(100);
 }
 
+void split(String data, String* result) {
+  int index = data.indexOf(":");
+  if (index != -1) {
+    result[0] = data.substring(0, index);
+    result[1] = data.substring(index + 1);
+  }
+}
+
+void read(String* data) {
+  if (data[0] == "running") { running = data[1].toInt(); }
+  else if (data[0] == "refreshRate") { interval = 1000000 / data[1].toInt(); }
+  else if (data[0] == "softReset") { bmx160.softReset(); }
+  else if (data[0] == "setLowPower") { bmx160.setLowPower(); }
+  else if (data[0] == "wakeUp") { bmx160.wakeUp(); }
+}
+
 void loop(){
-  float temp, press, alt;
-  sBmx160SensorData_t magn, gyro, accel;
-  bmx160.getAllData(&magn, &gyro, &accel);
-  temp = bmp388.readTempC();
-  press = bmp388.readPressPa();
-  alt = bmp388.readAltitudeM();
+  unsigned long now = micros();
+  sBmx160SensorData_t imu[3];
+  float baro[3];
 
-  /* Display the Barometer results */
-  Serial.print("Barometer - ");
-  Serial.print("Temp: "); Serial.print(temp); Serial.print(" C"); Serial.print("  ");
-  Serial.print("Press: "); Serial.print(press); Serial.print(" Pa"); Serial.print("  ");
-  Serial.print("Alt: "); Serial.print(alt - calibratedAlt); Serial.print(" m"); Serial.print("  "); Serial.print("calibration: "); Serial.print(calibratedAlt); Serial.print(" m"); Serial.println("  ");
+  if (Serial.available() > 0) {
+    String data = Serial.readString();
+    String splitData[2] = {"", ""};
+    split(data, splitData);
+    read(splitData);
+  }
 
-  /* Display the magnetometer results */
-  Serial.print("Magnetometer - ");
-  Serial.print("X: "); Serial.print(magn.x); Serial.print("  ");
-  Serial.print("Y: "); Serial.print(magn.y); Serial.print("  ");
-  Serial.print("Z: "); Serial.print(magn.z); Serial.print("  ");
-  Serial.println("uT");
+  if (running == 0) {
+    delay(1000);
+    return;
+  }
 
-  /* Display the gyroscope results */
-  Serial.print("Gyroscope - ");
-  Serial.print("X: "); Serial.print(gyro.x); Serial.print("  ");
-  Serial.print("Y: "); Serial.print(gyro.y); Serial.print("  ");
-  Serial.print("Z: "); Serial.print(gyro.z); Serial.print("  ");
-  Serial.println("g");
+  bmx160.getAllData(&imu[0], &imu[1], &imu[2]); // Magn, Gyro, Accel
+  baro[0] = bmp388.readTempC();
+  baro[1] = bmp388.readPressPa();
+  baro[2] = bmp388.readAltitudeM();
 
-  /* Display the accelerometer results */
-  Serial.print("Accelerometer - ");
-  Serial.print("X: "); Serial.print(accel.x); Serial.print("  ");
-  Serial.print("Y: "); Serial.print(accel.y); Serial.print("  ");
-  Serial.print("Z: "); Serial.print(accel.z); Serial.print("  ");
-  Serial.println("m/s^2"); Serial.println("");
+  Serial.print(now); Serial.print(":");
+  Serial.print(imu[0].x, 1); Serial.print(":"); Serial.print(imu[0].y, 1); Serial.print(":"); Serial.print(imu[0].z, 1); Serial.print(":");
+  Serial.print(imu[1].x, 7); Serial.print(":"); Serial.print(imu[1].y, 7); Serial.print(":"); Serial.print(imu[1].z, 7); Serial.print(":");
+  Serial.print(imu[2].x, 7); Serial.print(":"); Serial.print(imu[2].y, 7); Serial.print(":"); Serial.print(imu[2].z, 7); Serial.print(":");
+  Serial.print(baro[0], 7); Serial.print(":"); Serial.print(baro[1], 7); Serial.print(":"); Serial.println(baro[2], 7);
 
-  delay(1000);
+  unsigned long elapsedTime = now - previousTime;
+  if (elapsedTime >= interval) {
+    delayMicroseconds(interval - (elapsedTime % interval));
+    previousTime = now;
+  }
 }
