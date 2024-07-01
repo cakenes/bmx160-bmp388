@@ -8,7 +8,7 @@ import serial
 import math
 import time
 
-ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)
+ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=60)
 ax = ay = az = 0.0
 
 timestamp = 0
@@ -115,62 +115,67 @@ def read_data():
     global mag_x, mag_y, mag_z
     global last_timestamp, last_pitch, last_roll, last_yaw
     line = ser.readline()
-    if line:
-        decoded_line = line.decode("utf-8").strip()
-        angles = decoded_line.split(":")
-        if len(angles) == 13:
-            timestamp = float(angles[0])
-            accel_x = float(angles[1])
-            accel_y = float(angles[2])
-            accel_z = float(angles[3])
-            gyro_x = float(angles[4])
-            gyro_y = float(angles[5])
-            gyro_z = float(angles[6])
-            mag_x = float(angles[7])
-            mag_y = float(angles[8])
-            mag_z = float(angles[9])
-            time_elapsed = (timestamp - last_timestamp) / 1_000_000.0
-            last_timestamp = timestamp
+
+    try:
+        decoded_line = line.decode("utf-8", errors='replace').strip()
+    except UnicodeDecodeError:
+        print("Failed to decode line, skipping...")
+        return
+    
+    angles = decoded_line.split(":")
+    if len(angles) == 13:
+        timestamp = float(angles[0])
+        accel_x = float(angles[1])
+        accel_y = float(angles[2])
+        accel_z = float(angles[3])
+        gyro_x = float(angles[4])
+        gyro_y = float(angles[5])
+        gyro_z = float(angles[6])
+        mag_x = float(angles[7])
+        mag_y = float(angles[8])
+        mag_z = float(angles[9])
+        time_elapsed = (timestamp - last_timestamp) / 1_000_000.0
+        last_timestamp = timestamp
 
 
-            pitch = math.atan2(-mag_x, mag_z)
-            roll = math.atan2(mag_y, mag_z)
-            pitch_degrees = math.degrees(pitch)
-            roll_degrees = math.degrees(roll)
+        pitch = math.atan2(-mag_x, mag_z)
+        roll = math.atan2(mag_y, mag_z)
+        pitch_degrees = math.degrees(pitch)
+        roll_degrees = math.degrees(roll)
 
-            delta_pitch = (pitch_degrees - last_pitch) * time_elapsed
-            delta_roll = (roll_degrees - last_roll) * time_elapsed
+        delta_pitch = (pitch_degrees - last_pitch) * time_elapsed
+        delta_roll = (roll_degrees - last_roll) * time_elapsed
 
-            ay += (gyro_y * GYRO_WEIGHT - delta_roll * DELTA_WEIGHT)
-            ax -= (gyro_x * GYRO_WEIGHT + delta_pitch * DELTA_WEIGHT)
-            az += (gyro_z)
+        ay += (gyro_y * GYRO_WEIGHT - delta_roll * DELTA_WEIGHT)
+        ax += (gyro_x * GYRO_WEIGHT + delta_pitch * DELTA_WEIGHT)
+        az += (gyro_z)
 
-            last_pitch = pitch_degrees
-            last_roll = roll_degrees
+        last_pitch = pitch_degrees
+        last_roll = roll_degrees
 
-            # Original calculation of pitch, roll, and yaw
-            # pitch = math.atan2(float(angles[8]), math.sqrt(float(angles[7])**2 + float(angles[9])**2))
-            # roll = math.atan2(float(angles[7]), math.sqrt(float(angles[8])**2 + float(angles[9])**2))
-            # yaw = math.atan2(float(angles[2]), float(angles[1])) * (180 / math.pi)
+        # Original calculation of pitch, roll, and yaw
+        # pitch = math.atan2(float(angles[8]), math.sqrt(float(angles[7])**2 + float(angles[9])**2))
+        # roll = math.atan2(float(angles[7]), math.sqrt(float(angles[8])**2 + float(angles[9])**2))
+        # yaw = math.atan2(float(angles[2]), float(angles[1])) * (180 / math.pi)
 
-            # pitch_degrees = math.degrees(pitch)
-            # roll_degrees = math.degrees(roll)
-            # yaw_degrees = math.degrees(yaw)
+        # pitch_degrees = math.degrees(pitch)
+        # roll_degrees = math.degrees(roll)
+        # yaw_degrees = math.degrees(yaw)
 
-            # Calculate the change in angles
-            # delta_pitch = (pitch_degrees - last_pitch) * time_elapsed
-            # delta_roll = (roll_degrees - last_roll) * time_elapsed
-            # delta_yaw = (yaw_degrees - last_yaw) * time_elapsed
+        # Calculate the change in angles
+        # delta_pitch = (pitch_degrees - last_pitch) * time_elapsed
+        # delta_roll = (roll_degrees - last_roll) * time_elapsed
+        # delta_yaw = (yaw_degrees - last_yaw) * time_elapsed
 
-            # Update ax, ay, az based on the change and time elapsed
-            # ay += (gyro_y * GYRO_WEIGHT - delta_roll * DELTA_WEIGHT)
-            # ax += (gyro_x * GYRO_WEIGHT + delta_pitch * DELTA_WEIGHT)
-            # az += (gyro_z)
+        # Update ax, ay, az based on the change and time elapsed
+        # ay += (gyro_y * GYRO_WEIGHT - delta_roll * DELTA_WEIGHT)
+        # ax += (gyro_x * GYRO_WEIGHT + delta_pitch * DELTA_WEIGHT)
+        # az += (gyro_z)
 
-            # Update last_pitch, last_roll, last_yaw
-            # last_pitch = pitch_degrees
-            # last_roll = roll_degrees
-            # last_yaw = yaw_degrees
+        # Update last_pitch, last_roll, last_yaw
+        # last_pitch = pitch_degrees
+        # last_roll = roll_degrees
+        # last_yaw = yaw_degrees
 
 def main():
     global ax, ay, az, rolling_avg_read_frequency
