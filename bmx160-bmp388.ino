@@ -11,7 +11,7 @@ typedef struct {
     float baro[3];
 } Sensor;
 
-int run = 0;
+int run = 1;
 int frequency = 10;
 int cumulative = 1;
 float sensitivity[2] = {16384.0, 10};
@@ -71,7 +71,7 @@ void calibrate(int count) {
 
     unsigned long end = micros();
     unsigned long elapsed = end - start;
-    unsigned long delay = (1000000 / 100);
+    unsigned long delay = (1000000 / 50);
     if (elapsed < delay) delayMicroseconds(delay - elapsed);
   }
 
