@@ -61,13 +61,13 @@ void read(std::vector<String>& data) {
   else if (data.at(0) == "sensitivity") { sensitivity[0] = data.at(1).toFloat(); sensitivity[1] = data.at(2).toFloat(); sensitivity[2] = data.at(3).toFloat();  }
 }
 
-void calibrate(int count) {
+void calibrate(int count) { // Counts over 100 can cause overflow
   Sensor temp;
 
   for (int i = 0; i < count; i++) {
     unsigned long start = micros();
-    bmx160.getAllData(&offset.imu[0], &offset.imu[1], NULL);
-    for (int i = 0; i < 2; i++) {
+    bmx160.getAllData(&offset.imu[0], &offset.imu[1], &offset.imu[2]);
+    for (int i = 0; i < 3; i++) {
       temp.imu[i].x += offset.imu[i].x;
       temp.imu[i].y += offset.imu[i].y;
       temp.imu[i].z += offset.imu[i].z;
@@ -75,17 +75,20 @@ void calibrate(int count) {
 
     unsigned long end = micros();
     unsigned long elapsed = end - start;
-    unsigned long delay = (1000000 / 50);
+    unsigned long delay = (1000000 / 80);
     if (elapsed < delay) delayMicroseconds(delay - elapsed);
   }
 
-  for (int i = 0; i < 2; i++) {
+  Serial.println("Calibration done: ");
+
+  for (int i = 0; i < 3; i++) {
     offset.imu[i].x = temp.imu[i].x / count;
     offset.imu[i].y = temp.imu[i].y / count;
     offset.imu[i].z = temp.imu[i].z / count;
-  }
+    if (i == 2) offset.imu[i].z += 10; // Offset mag Z by 10 to calibrate right side up
 
-  Serial.println("Calibration done");
+    Serial.print("X: "); Serial.print(offset.imu[i].x, 7); Serial.print("Y: "); Serial.print(offset.imu[i].y, 7); Serial.print("Z: "); Serial.println(offset.imu[i].z, 7); 
+  }
 }
 
 void sensors(Sensor* sensor) {
@@ -103,9 +106,9 @@ void print(unsigned long time, Sensor* sensor) {
   Serial.print((sensor->imu[1].x - offset.imu[1].x) / sensitivity[1], 7); Serial.print(":");    // [4] gyro x
   Serial.print((sensor->imu[1].y - offset.imu[1].y) / sensitivity[1], 7); Serial.print(":");    // [5] gyro y
   Serial.print((sensor->imu[1].z - offset.imu[1].z) / sensitivity[1], 7); Serial.print(":");    // [6] gyro z
-  Serial.print(sensor->imu[2].x, 7); Serial.print(":");                                         // [7] mag x
-  Serial.print(sensor->imu[2].y, 7); Serial.print(":");                                         // [8] mag y
-  Serial.print(sensor->imu[2].z, 7); Serial.print(":");                                         // [9] mag z
+  Serial.print((sensor->imu[2].x - offset.imu[2].x) / sensitivity[2], 7); Serial.print(":");    // [7] mag x
+  Serial.print((sensor->imu[2].y - offset.imu[2].y) / sensitivity[2], 7); Serial.print(":");    // [8] mag y
+  Serial.print((sensor->imu[2].z - offset.imu[2].z) / sensitivity[2], 7); Serial.print(":");    // [9] mag z
   Serial.print(sensor->baro[0], 7); Serial.print(":");                                          // [10] temp
   Serial.print(sensor->baro[1], 7); Serial.print(":");                                          // [11] pressure
   Serial.println(sensor->baro[2], 7);                                                           // [12] altitude
