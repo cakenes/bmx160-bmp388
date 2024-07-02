@@ -38,24 +38,27 @@ void setup() {
   bmx160.setLowPower();
 }
 
-void split(String data, String* result) {
-  int index = data.indexOf(":");
-  if (index != -1) {
-    result[0] = data.substring(0, index);
-    result[1] = data.substring(index + 1);
+void split(const String& data, std::vector<String>& result) {
+  int start = 0;
+  int end = data.indexOf(" ");
+  while (end != -1) {
+    result.push_back(data.substring(start, end));
+    start = end + 1;
+    end = data.indexOf(" ", start);
   }
+  result.push_back(data.substring(start));
 }
 
-void read(String* data) {
-  if (data[0] == "run") { run = data[1].toInt(); }
-  else if (data[0] == "frequency") { frequency = data[1].toInt(); }
-  else if (data[0] == "cumulative") { cumulative = data[1].toInt(); }
-  else if (data[0] == "accelSens") { sensitivity[0] = data[1].toFloat(); }
-  else if (data[0] == "gyroSens") { sensitivity[1] = data[1].toFloat(); }
-  else if (data[0] == "calibrate") { calibrate(data[1].toInt()); }
-  else if (data[0] == "softReset") { bmx160.softReset(); }
-  else if (data[0] == "setLowPower") { bmx160.setLowPower(); }
-  else if (data[0] == "wakeUp") { bmx160.wakeUp(); }
+void read(std::vector<String>& data) {
+  if (data.at(0) == "run") { run = !run; }
+  else if (data.at(0) == "reset") { bmx160.softReset(); }
+  else if (data.at(0) == "powersave") { bmx160.setLowPower(); }
+  else if (data.at(0) == "wake") { bmx160.wakeUp(); }
+  else if (data.size() <= 1) { Serial.println("Invalid number parameters, 1 required"); }
+  else if (data.at(0) == "frequency") { frequency = data.at(1).toInt(); }
+  else if (data.at(0) == "calibrate") { calibrate(data.at(1).toInt()); }
+  else if (data.size() <= 3) { Serial.println("Invalid number of parameters, 3 required"); }
+  else if (data.at(0) == "sensitivity") { sensitivity[0] = data.at(1).toFloat(); sensitivity[1] = data.at(2).toFloat(); sensitivity[2] = data.at(3).toFloat();  }
 }
 
 void calibrate(int count) {
@@ -113,10 +116,10 @@ void loop(){
   unsigned long start = micros();
 
   if (Serial.available() > 0) {
-    String data = Serial.readString();
-    String splitData[2] = {"", ""};
-    split(data, splitData);
-    read(splitData);
+    String input = Serial.readStringUntil('\n');
+    std::vector<String> parts;
+    split(input, parts);
+    read(parts);
   }
 
   if (run) {
