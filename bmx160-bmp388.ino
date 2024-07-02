@@ -11,10 +11,9 @@ typedef struct {
     float baro[3];
 } Sensor;
 
-int run = 1;
-int frequency = 10;
-int cumulative = 1;
-float sensitivity[2] = {16384.0, 10};
+bool run = true;
+int frequency = 80;
+float sensitivity[3] = {16384.0, 16.4, 1};
 Sensor offset;
 
 void setup() {
@@ -35,6 +34,8 @@ void setup() {
 
   delay(100);
   calibrate(100);
+
+  bmx160.setLowPower();
 }
 
 void split(String data, String* result) {
@@ -118,7 +119,7 @@ void loop(){
     read(splitData);
   }
 
-  if (run == 1) {
+  if (run) {
     sensors(&temp);
     print(start, &temp);
   }
