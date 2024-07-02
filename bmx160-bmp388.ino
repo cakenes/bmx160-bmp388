@@ -23,12 +23,12 @@ void setup() {
   delay(100);
 
   if (bmp388.begin() != 0) {
-    Serial.println("bmp388 init failed");
+    Serial.println("bmp388 Initialization failed");
     while (1);
   }
 
   if (!bmx160.begin()) {
-    Serial.println("bmx160 init failed");
+    Serial.println("bmx160 Initialization failed");
     while (1);
   }
 
