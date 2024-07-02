@@ -219,19 +219,19 @@ def main():
         if event.type == KEYDOWN and event.key == K_r:
             valueMagX = valueMagY = valueMagZ = 0.0
         elif event.type == KEYDOWN and event.key == K_c:
-            ser.write(b'calibrate:100\n')
+            ser.write(b'calibrate 100\n')
         elif event.type == KEYDOWN and event.key == K_1:
             trueFrequency = 100
-            ser.write(b'frequency:100\n')
+            ser.write(b'frequency 100\n')
         elif event.type == KEYDOWN and event.key == K_2:
             trueFrequency = 80
-            ser.write(b'frequency:80\n')
+            ser.write(b'frequency 80\n')
         elif event.type == KEYDOWN and event.key == K_3:
             trueFrequency = 50
-            ser.write(b'frequency:50\n')
+            ser.write(b'frequency 50\n')
         elif event.type == KEYDOWN and event.key == K_4:
             trueFrequency = 10
-            ser.write(b'frequency:10\n')
+            ser.write(b'frequency 10\n')
         read_data()
         draw()
         pygame.display.flip()
