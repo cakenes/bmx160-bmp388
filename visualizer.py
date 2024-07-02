@@ -12,15 +12,18 @@ ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=60)
 ax = ay = az = 0.0
 
 timestamp = 0
-accel_x = accel_y = accel_z = 0.0
-gyro_x = gyro_y = gyro_z = 0.0
-mag_x = mag_y = mag_z = 0.0
+accelX = accelY = accelZ = 0.0
+gyroX = gyroY = gyroZ = 0.0
+magX = magY = magZ = 0.0
 
-timestamp = last_timestamp = rolling_avg_read_frequency = 0
-last_pitch = last_roll = last_yaw = 0.0
+valueGyroX = valueGyroY = valueGyroZ = 0.0
+valueMagX = valueMagY = valueMagZ = 0.0
 
-GYRO_WEIGHT = 0.95
-DELTA_WEIGHT = 0.05
+timestamp = lastTimestamp = trueFrequency = 0
+
+GYRO_WEIGHT = 0
+MAG_WEIGHT = 1
+ACCEL_WEIGHT = 0
 
 def resize(width, height):
     glViewport(0, 0, width, height)
@@ -54,18 +57,18 @@ def draw():
 
     osd_text = "X: " + str(ax) + ", Y: " + str(ay) + ", Z: " + str(az)
     drawText((-3.5,-1.0, 2), osd_text)
-    osd_text = "MagX: " + str(mag_x) + ", MagY: " + str(mag_y) + ", MagZ: " + str(mag_z)
+    osd_text = "MagX: " + str(magX) + ", MagY: " + str(magY) + ", MagZ: " + str(magZ)
     drawText((-3.5,-1.2, 2), osd_text)
-    osd_text = "GyroX: " + str(gyro_x) + ", GyroY: " + str(gyro_y) + ", GyroZ: " + str(gyro_z)
+    osd_text = "GyroX: " + str(gyroX) + ", GyroY: " + str(gyroY) + ", GyroZ: " + str(gyroZ)
     drawText((-3.5,-1.4, 2), osd_text)
-    osd_text = "AccelX: " + str(accel_x) + ", AccelY: " + str(accel_y) + ", AccelZ: " + str(accel_z)
+    osd_text = "AccelX: " + str(accelX) + ", AccelY: " + str(accelY) + ", AccelZ: " + str(accelZ)
     drawText((-3.5,-1.6, 2), osd_text)
     osd_text = "C: Calibrate, R: Reset orientation, Esc: Quit."
     drawText((-3.5,-1.8, 2), osd_text)
-    osd_text = "1: 100hz, 2: 80hz, 3: 50hz, 4: 10hz, Current Frequency: " + str(rolling_avg_read_frequency) + "hz"
+    osd_text = "1: 100hz, 2: 80hz, 3: 50hz, 4: 10hz, Current Frequency: " + str(trueFrequency) + "hz"
     drawText((-3.5,-2, 2), osd_text)
 
-    glRotatef(0, 0.0, 1.0, 0.0)
+    glRotatef(az, 0.0, 1.0, 0.0)
     glRotatef(ay ,1.0,0.0,0.0)
     glRotatef(-1*ax ,0.0,0.0,1.0)
 
@@ -106,14 +109,20 @@ def draw():
     glVertex3f( 1.0,-0.2, 1.0)		
     glVertex3f( 1.0,-0.2,-1.0)		
     glEnd()	
-         
+
+def interpolate(value1, value2, t):
+    return value1 + (value2 - value1) * (t * t * (3 - 2 * t))
+
 def read_data():
     global ax, ay, az
-    global timestamp
-    global accel_x, accel_y, accel_z
-    global gyro_x, gyro_y, gyro_z
-    global mag_x, mag_y, mag_z
-    global last_timestamp, last_pitch, last_roll, last_yaw
+    global timestamp, lastTimestamp
+    global accelX, accelY, accelZ
+    global gyroX, gyroY, gyroZ
+    global magX, magY, magZ
+    global valueGyroX, valueGyroY, valueGyroZ
+    global valueMagX, valueMagY, valueMagZ
+    global trueFrequency
+
     line = ser.readline()
 
     try:
@@ -125,60 +134,64 @@ def read_data():
     angles = decoded_line.split(":")
     if len(angles) == 13:
         timestamp = float(angles[0])
-        accel_x = float(angles[1])
-        accel_y = float(angles[2])
-        accel_z = float(angles[3])
-        gyro_x = float(angles[4])
-        gyro_y = float(angles[5])
-        gyro_z = float(angles[6])
-        mag_x = float(angles[7])
-        mag_y = float(angles[8])
-        mag_z = float(angles[9])
-        time_elapsed = (timestamp - last_timestamp) / 1_000_000.0
-        last_timestamp = timestamp
+        accelX = float(angles[1])
+        accelY = float(angles[2])
+        accelZ = float(angles[3])
+        gyroX = float(angles[4])
+        gyroY = float(angles[5])
+        gyroZ = float(angles[6])
+        magX = float(angles[7])
+        magY = float(angles[8])
+        magZ = float(angles[9])
 
+        timeElapsed = (timestamp - lastTimestamp) / 1_000_000.0
+        lastTimestamp = timestamp
+        
+        if MAG_WEIGHT != 0:
+            angle_radians = math.atan2(magY, magZ)
+            angle_degrees_x = math.degrees(angle_radians)
+            targetValueMagX = (450 - angle_degrees_x - 90) % 360
+            valueMagX = interpolate(valueMagX, targetValueMagX, 0.2)
 
-        pitch = math.atan2(-mag_x, mag_z)
-        roll = math.atan2(mag_y, mag_z)
-        pitch_degrees = math.degrees(pitch)
-        roll_degrees = math.degrees(roll)
+            angle_radians_y = math.atan2(magX, magZ)
+            angle_degrees_y = math.degrees(angle_radians_y)
+            targetValueMagY = (450 - angle_degrees_y - 90) % 360
+            valueMagY = interpolate(valueMagY, targetValueMagY, 0.2)
 
-        delta_pitch = (pitch_degrees - last_pitch) * time_elapsed
-        delta_roll = (roll_degrees - last_roll) * time_elapsed
+            if magZ > 0:
+                valueMagZ = -180
+            else:
+                valueMagZ = 0
 
-        ay += (gyro_y * GYRO_WEIGHT - delta_roll * DELTA_WEIGHT)
-        ax += (gyro_x * GYRO_WEIGHT + delta_pitch * DELTA_WEIGHT)
-        az += (gyro_z)
+            # angle_radians = math.atan2(magY, magX)
+            # angle_degrees_z = math.degrees(angle_radians)
+            # targetValueMagZ = (450 - angle_degrees_z - 90) % 360
+            # valueMagZ = interpolate(valueMagZ, targetValueMagZ, 0.2)
 
-        last_pitch = pitch_degrees
-        last_roll = roll_degrees
+        
+        if ACCEL_WEIGHT != 0:
+            # Accelerometer wants to keep going to the direction its already going, only use mag data?. 
+            accelPitch = math.atan2(accelY, math.sqrt(accelX**2 + accelZ**2))
+            accelRoll = math.atan2(-accelX, math.sqrt(accelY**2 + accelZ**2))
+            accelPitchDegrees = math.degrees(accelPitch)
+            accelRollDegrees = math.degrees(accelRoll)
+            deltaPitch = (accelPitchDegrees - lastPitch) * timeElapsed
+            deltaRoll = (accelRollDegrees - lastRoll) * timeElapsed
+            ay += deltaRoll
+            ax += deltaPitch
 
-        # Original calculation of pitch, roll, and yaw
-        # pitch = math.atan2(float(angles[8]), math.sqrt(float(angles[7])**2 + float(angles[9])**2))
-        # roll = math.atan2(float(angles[7]), math.sqrt(float(angles[8])**2 + float(angles[9])**2))
-        # yaw = math.atan2(float(angles[2]), float(angles[1])) * (180 / math.pi)
+        if GYRO_WEIGHT != 0:
+            valueGyroX += gyroX * timeElapsed * trueFrequency / 10
+            valueGyroY += gyroY * timeElapsed * trueFrequency / 10
+            valueGyroZ += gyroZ * timeElapsed * trueFrequency / 10
 
-        # pitch_degrees = math.degrees(pitch)
-        # roll_degrees = math.degrees(roll)
-        # yaw_degrees = math.degrees(yaw)
-
-        # Calculate the change in angles
-        # delta_pitch = (pitch_degrees - last_pitch) * time_elapsed
-        # delta_roll = (roll_degrees - last_roll) * time_elapsed
-        # delta_yaw = (yaw_degrees - last_yaw) * time_elapsed
-
-        # Update ax, ay, az based on the change and time elapsed
-        # ay += (gyro_y * GYRO_WEIGHT - delta_roll * DELTA_WEIGHT)
-        # ax += (gyro_x * GYRO_WEIGHT + delta_pitch * DELTA_WEIGHT)
-        # az += (gyro_z)
-
-        # Update last_pitch, last_roll, last_yaw
-        # last_pitch = pitch_degrees
-        # last_roll = roll_degrees
-        # last_yaw = yaw_degrees
+        ax = (valueGyroX * GYRO_WEIGHT) + (valueMagX * MAG_WEIGHT)
+        ay = (valueGyroY * GYRO_WEIGHT) + (valueMagY * MAG_WEIGHT)
+        az = (valueGyroZ * GYRO_WEIGHT) + (valueMagZ * MAG_WEIGHT)
 
 def main():
-    global ax, ay, az, rolling_avg_read_frequency
+    global trueFrequency
+    global valueMagX, valueMagY, valueMagZ
     video_flags = OPENGL|DOUBLEBUF
     pygame.init()
     screen = pygame.display.set_mode((920,480), video_flags)
@@ -195,7 +208,7 @@ def main():
             if len(read_counts) > 10:
                 read_counts.pop(0)
             
-            rolling_avg_read_frequency = sum(read_counts) / len(read_counts)
+            trueFrequency = sum(read_counts) / len(read_counts)
             read_count = 0
             start_time = time.time()
 
@@ -204,16 +217,20 @@ def main():
             pygame.quit()
             break 
         if event.type == KEYDOWN and event.key == K_r:
-            ax = ay = az = 0.0
+            valueMagX = valueMagY = valueMagZ = 0.0
         elif event.type == KEYDOWN and event.key == K_c:
             ser.write(b'calibrate:100\n')
         elif event.type == KEYDOWN and event.key == K_1:
+            trueFrequency = 100
             ser.write(b'frequency:100\n')
         elif event.type == KEYDOWN and event.key == K_2:
+            trueFrequency = 80
             ser.write(b'frequency:80\n')
         elif event.type == KEYDOWN and event.key == K_3:
+            trueFrequency = 50
             ser.write(b'frequency:50\n')
         elif event.type == KEYDOWN and event.key == K_4:
+            trueFrequency = 10
             ser.write(b'frequency:10\n')
         read_data()
         draw()
