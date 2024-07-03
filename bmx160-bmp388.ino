@@ -1,3 +1,6 @@
+#include <Update.h>
+#include <WiFi.h>
+#include <WebServer.h>
 #include <Wire.h>
 #include <math.h>
 #include <DFRobot_BMX160.h>
@@ -12,9 +15,49 @@ typedef struct {
 } Sensor;
 
 bool run = true;
+bool serve = false;
 int frequency = 100; // Hz
 float sensitivity[3] = {16384.0, 16.4, 1};
 Sensor offset;
+WebServer webserver(80);
+
+const char* index = R"rawliteral(
+<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>
+<form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>
+   <input type='file' name='update'>
+   <input type='submit' value='Update'>
+</form>
+<div id='prg'>progress: 0%</div>
+<script>
+  $('form').submit(function(e){
+    e.preventDefault();
+    var form = $('#upload_form')[0];
+    var data = new FormData(form);
+    $.ajax({
+      url: '/update',
+      type: 'POST',
+      data: data,
+      contentType: false,
+      processData:false,
+      xhr: function() {
+        var xhr = new window.XMLHttpRequest();
+        xhr.upload.addEventListener('progress', function(evt) {
+          if (evt.lengthComputable) {
+            var per = evt.loaded / evt.total;
+            $('#prg').html('progress: ' + Math.round(per*100) + '%');
+          }
+        }, false);
+        return xhr;
+      },
+      success:function(d, s) {
+        console.log('success!')
+      },
+      error: function (a, b, c) {
+      }
+    });
+  });
+</script>
+)rawliteral";
 
 void setup() {
   Serial.begin(921600);
@@ -58,6 +101,8 @@ void read(std::vector<String>& data) {
   else if (data.at(0) == "frequency") { frequency = data.at(1).toInt(); }
   else if (data.at(0) == "calibrate") { calibrate(data.at(1).toInt()); }
   else if (data.size() <= 3) { Serial.println("Invalid number of parameters, 3 required"); }
+  else if (data.at(0) == "wifi") { wifi(data.at(1), data.at(2), data.at(3).toInt()); }
+  else if (data.at(0) == "server") { server(data.at(1), data.at(2), data.at(3).toInt()); }
   else if (data.at(0) == "sensitivity") { sensitivity[0] = data.at(1).toFloat(); sensitivity[1] = data.at(2).toFloat(); sensitivity[2] = data.at(3).toFloat();  }
 }
 
@@ -114,6 +159,55 @@ void print(unsigned long time, Sensor* sensor) {
   Serial.println(sensor->baro[2], 7);                                                           // [12] altitude
 }
 
+void wifi(String ssid, String password, int retry) {
+  WiFi.begin(ssid, password);
+
+  for (int i = 0; i < retry; i++) {
+    if (WiFi.status() == WL_CONNECTED) break;
+    Serial.print("Connecting to: "); Serial.println(ssid);
+    delay(1000);
+  }
+
+  Serial.print("Connected to: "); Serial.println(ssid);
+}
+
+void server(String ssid, String password, int retry) {
+  run = false;
+
+  if (WiFi.status() != WL_CONNECTED) wifi(ssid, password, retry);
+
+  webserver.on("/", HTTP_GET, []() {
+    webserver.sendHeader("Connection", "close");
+    webserver.send(200, "text/html", serverIndex);
+  });
+
+  webserver.on("/update", HTTP_POST, []() {
+    webserver.sendHeader("Connection", "close");
+    webserver.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
+    ESP.restart();
+  }, []() {
+    HTTPUpload& upload = webserver.upload();
+    if (upload.status == UPLOAD_FILE_START) {
+      Serial.print("Updating with: "); Serial.println(upload.filename.c_str());
+      if (!Update.begin(UPDATE_SIZE_UNKNOWN)) Update.printError(Serial);
+    } else if (upload.status == UPLOAD_FILE_WRITE) {
+      if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) Update.printError(Serial);
+    } else if (upload.status == UPLOAD_FILE_END) {
+      if (Update.end(true)) {
+        Serial.print("Update success with: "); Serial.print(upload.filename.c_str()); Serial.print(", size: "); Serial.print(upload.totalSize); Serial.println(" bytes");
+        Serial.println("Rebooting");
+      } else {
+        Update.printError(Serial);
+      }
+    }
+  });
+
+  webserver.begin();
+  serve = true;
+
+  Serial.print("Serving at: "); Serial.println(WiFi.localIP());
+}
+
 void loop(){
   Sensor temp;
   unsigned long start = micros();
@@ -125,7 +219,9 @@ void loop(){
     read(parts);
   }
 
-  if (run) {
+  if (serve) {
+    webserver.handleClient();
+  } else if (run) {
     sensors(&temp);
     print(start, &temp);
   }
