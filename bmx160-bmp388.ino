@@ -94,6 +94,7 @@ void split(const String& data, std::vector<String>& result) {
 
 void read(std::vector<String>& data) {
   if (data.at(0) == "run") { run = !run; }
+  else if (data.at(0) == "reboot") { ESP.restart(); }
   else if (data.at(0) == "reset") { bmx160.softReset(); }
   else if (data.at(0) == "powersave") { bmx160.setLowPower(); }
   else if (data.at(0) == "wake") { bmx160.wakeUp(); }
