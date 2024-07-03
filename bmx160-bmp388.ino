@@ -21,7 +21,7 @@ float sensitivity[3] = {16384.0, 16.4, 1};
 Sensor offset;
 WebServer webserver(80);
 
-const char* index = R"rawliteral(
+const char* serverIndex = R"rawliteral(
 <script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>
 <form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>
    <input type='file' name='update'>
