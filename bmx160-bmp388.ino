@@ -12,13 +12,13 @@ typedef struct {
 } Sensor;
 
 bool run = true;
-int frequency = 80;
+int frequency = 1;
 float sensitivity[3] = {16384.0, 16.4, 1};
 Sensor offset;
 
 void setup() {
-  Serial.begin(115200);
-  Wire.begin(2, 0);
+  Serial.begin(921600);
+  Wire.begin(2, 1);
 
   delay(100);
 
@@ -35,7 +35,7 @@ void setup() {
   delay(100);
   calibrate(100);
 
-  bmx160.setLowPower();
+  // bmx160.setLowPower();
 }
 
 void split(const String& data, std::vector<String>& result) {

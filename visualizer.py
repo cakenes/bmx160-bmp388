@@ -8,7 +8,7 @@ import serial
 import math
 import time
 
-ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=60)
+ser = serial.Serial('/dev/ttyUSB0', 921600, timeout=60)
 ax = ay = az = 0.0
 
 timestamp = 0
