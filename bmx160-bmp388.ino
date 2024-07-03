@@ -15,7 +15,7 @@ typedef struct {
 } Sensor;
 
 bool run = true;
-bool serve, powersave = false;
+bool serve, powermode = false;
 int frequency = 100; // Hz
 float sensitivity[3] = {16384.0, 16.4, 1};
 Sensor offset;
@@ -102,7 +102,7 @@ void split(const String& data, std::vector<String>& result) {
 }
 
 void powersave() {
-  if (powersave) bmx160.wakeUp();
+  if (powermode) bmx160.wakeUp();
   else bmx160.setLowPower();
 }
 
