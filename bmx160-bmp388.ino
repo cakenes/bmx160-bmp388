@@ -12,13 +12,13 @@ typedef struct {
 } Sensor;
 
 bool run = true;
-int frequency = 1;
+int frequency = 100; // Hz
 float sensitivity[3] = {16384.0, 16.4, 1};
 Sensor offset;
 
 void setup() {
   Serial.begin(921600);
-  Wire.begin(2, 1);
+  Wire.begin(5, 4);
 
   delay(100);
 
@@ -61,7 +61,7 @@ void read(std::vector<String>& data) {
   else if (data.at(0) == "sensitivity") { sensitivity[0] = data.at(1).toFloat(); sensitivity[1] = data.at(2).toFloat(); sensitivity[2] = data.at(3).toFloat();  }
 }
 
-void calibrate(int count) { // Counts over 100 can cause overflow
+void calibrate(int count) { // Counts over 100 can cause overflow for esp8622
   Sensor temp;
 
   for (int i = 0; i < count; i++) {
@@ -75,7 +75,7 @@ void calibrate(int count) { // Counts over 100 can cause overflow
 
     unsigned long end = micros();
     unsigned long elapsed = end - start;
-    unsigned long delay = (1000000 / 80);
+    unsigned long delay = (1000000 / 100);
     if (elapsed < delay) delayMicroseconds(delay - elapsed);
   }
 

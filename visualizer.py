@@ -8,7 +8,7 @@ import serial
 import math
 import time
 
-ser = serial.Serial('/dev/ttyUSB0', 921600, timeout=60)
+ser = serial.Serial('/dev/ttyACM0', 921600, timeout=60)
 ax = ay = az = 0.0
 
 timestamp = 0
@@ -65,7 +65,7 @@ def draw():
     drawText((-3.5,-1.6, 2), osd_text)
     osd_text = "C: Calibrate, R: Reset orientation, Esc: Quit."
     drawText((-3.5,-1.8, 2), osd_text)
-    osd_text = "1: 100hz, 2: 80hz, 3: 50hz, 4: 10hz, Current Frequency: " + str(trueFrequency) + "hz"
+    osd_text = "1: 100hz, 2: 80hz, 3: 50hz, 4: 10hz, Actual Freq: " + str(trueFrequency) + "hz"
     drawText((-3.5,-2, 2), osd_text)
 
     glRotatef(az, 0.0, 1.0, 0.0)
@@ -148,12 +148,12 @@ def read_data():
         lastTimestamp = timestamp
         
         if MAG_WEIGHT != 0:
-            angle_radians = math.atan2(magY, magZ)
+            angle_radians = math.atan2(-magY, magZ)
             angle_degrees_x = math.degrees(angle_radians)
             targetValueMagX = (450 - angle_degrees_x - 90) % 360
             valueMagX = interpolate(valueMagX, targetValueMagX, 0.2)
 
-            angle_radians_y = math.atan2(magX, magZ)
+            angle_radians_y = math.atan2(-magX, magZ)
             angle_degrees_y = math.degrees(angle_radians_y)
             targetValueMagY = (450 - angle_degrees_y - 90) % 360
             valueMagY = interpolate(valueMagY, targetValueMagY, 0.2)
@@ -175,6 +175,7 @@ def read_data():
             accelRoll = math.atan2(-accelX, math.sqrt(accelY**2 + accelZ**2))
             accelPitchDegrees = math.degrees(accelPitch)
             accelRollDegrees = math.degrees(accelRoll)
+            # lastRoll, lastPitch missing, should be global
             deltaPitch = (accelPitchDegrees - lastPitch) * timeElapsed
             deltaRoll = (accelRollDegrees - lastRoll) * timeElapsed
             ay += deltaRoll
