@@ -22,38 +22,48 @@ Sensor offset;
 WebServer webserver(80);
 
 const char* serverIndex = R"rawliteral(
+<style>
+  body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; margin: 0px; }
+  .container { display: flex; flex-direction: column; align-items: center; width: 50%; }
+  form { display: flex; background-color: #f2f2f2; padding: 20px; border-radius: 5px; border: 1px solid rgba(0,0,0,0.1); width: 100%; }
+  input[type="file"], input[type="submit"] { padding: 10px 20px; border: none; width: calc(100% - 40px); }
+  input[type="submit"] { background-color: #4CAF50; color: white; border-radius: 4px; cursor: pointer; }
+  input[type="submit"]:hover { background-color: #45a049; }
+  #progress-container { width: calc(100% + 40px); background-color: #ddd; border-radius: 5px; border: 1px solid rgba(0,0,0,0.1); text-align: center; }
+  #progress-bar { width: 0%; height: 20px; background-color: #4CAF50; margin-top: -20px; }
+</style>
 <script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>
+<div class="container"> <!-- Wrapper to control width -->
 <form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>
    <input type='file' name='update'>
    <input type='submit' value='Update'>
 </form>
-<div id='prg'>progress: 0%</div>
+  <div id='progress-container'>
+    0% <div id='progress-bar' />
+  </div>
+</div>
 <script>
-  $('form').submit(function(e){
+  $('#upload_form').submit(function(e){
     e.preventDefault();
-    var form = $('#upload_form')[0];
-    var data = new FormData(form);
     $.ajax({
       url: '/update',
       type: 'POST',
-      data: data,
+      data: new FormData(this),
       contentType: false,
-      processData:false,
-      xhr: function() {
+      processData: false,
+      xhr: () => {
         var xhr = new window.XMLHttpRequest();
-        xhr.upload.addEventListener('progress', function(evt) {
+        xhr.upload.addEventListener('progress', evt => {
           if (evt.lengthComputable) {
-            var per = evt.loaded / evt.total;
-            $('#prg').html('progress: ' + Math.round(per*100) + '%');
+            var percentComplete = Math.round((evt.loaded / evt.total) * 100);
+            $('#progress-bar').width(percentComplete + '%');
+            $('#progress-container').text(percentComplete + '%');
           }
-        }, false);
+        });
         return xhr;
       },
-      success:function(d, s) {
-        console.log('success!')
-      },
-      error: function (a, b, c) {
-      }
+      success: () => console.log('success!'),
+      error: () => console.log('error!')
     });
   });
 </script>
