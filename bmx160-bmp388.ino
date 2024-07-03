@@ -86,8 +86,7 @@ void setup() {
   }
 
   delay(100);
-  calibrate(500);
-  bmx160.setLowPower();
+  calibrate(100);
 }
 
 void split(const String& data, std::vector<String>& result) {
@@ -104,36 +103,36 @@ void split(const String& data, std::vector<String>& result) {
 void powersave() {
   if (powermode) bmx160.wakeUp();
   else bmx160.setLowPower();
+  powermode = !powermode;
 }
 
 void command(std::vector<String>& data) {
   switch (data.size()) {
   case 1:
-    if (data.at(0) == "run") { run = !run; break; }
-    else if (data.at(0) == "reboot") { ESP.restart(); break; }
-    else if (data.at(0) == "reset") { bmx160.softReset(); break; }
-    else if (data.at(0) == "powersave") { powersave(); break; }
+    if (data.at(0) == "run") { run = !run; return; }
+    else if (data.at(0) == "reboot") { ESP.restart(); return; }
+    else if (data.at(0) == "reset") { bmx160.softReset(); return; }
+    else if (data.at(0) == "powersave") { powersave(); return; }
     break;
   case 2:
-    if (data.at(0) == "frequency") { frequency = data.at(1).toInt(); break; }
-    else if (data.at(0) == "calibrate") { calibrate(data.at(1).toInt()); break; }
+    if (data.at(0) == "frequency") { frequency = data.at(1).toInt(); return; }
+    else if (data.at(0) == "calibrate") { calibrate(data.at(1).toInt()); return; }
     break;
   case 4:
-    if (data.at(0) == "wifi") { server(data.at(1), data.at(2), data.at(3).toInt()); break; }
-    else if (data.at(0) == "sensitivity") { sensitivity[0] = data.at(1).toFloat(); sensitivity[1] = data.at(2).toFloat(); sensitivity[2] = data.at(3).toFloat(); break; }
-    break;
-  default:
-    Serial.println("Command not found or invalid arguments, try:");
-    Serial.println("run                                                         - Toggles sensor readings");
-    Serial.println("reboot                                                      - Restarts device");
-    Serial.println("reset                                                       - Resets sensors");
-    Serial.println("powersave                                                   - Toggles low power mode");
-    Serial.println("frequency <hz as int>                                       - Sets sensor reading frequency");
-    Serial.println("calibrate <count as int>                                    - Calibrates sensors");
-    Serial.println("wifi <ssid as string> <password as string> <retry as int>   - Connects to wifi and starts web server");
-    Serial.println("sensitivity <accel as float> <gyro as float> <mag as float> - Sets sensor sensitivity");
+    if (data.at(0) == "wifi") { server(data.at(1), data.at(2), data.at(3).toInt()); return; }
+    else if (data.at(0) == "sensitivity") { sensitivity[0] = data.at(1).toFloat(); sensitivity[1] = data.at(2).toFloat(); sensitivity[2] = data.at(3).toFloat(); return; }
     break;
   }
+
+  Serial.println(); Serial.println("Command not found or invalid arguments, try:");
+  Serial.println("run  -  Toggles sensor readings");
+  Serial.println("reboot  -  Restarts device");
+  Serial.println("reset  -  Resets sensors");
+  Serial.println("powersave  -  Toggles low power mode");
+  Serial.println("frequency <hz as int>  -  Sets sensor reading frequency");
+  Serial.println("calibrate <count as int>  -  Calibrates sensors");
+  Serial.println("wifi <ssid as string> <password as string> <retry as int>  -  Connects to wifi and starts web server");
+  Serial.println("sensitivity <accel as float> <gyro as float> <mag as float>  -  Sets sensor sensitivity");
 }
 
 void calibrate(int count) { // High counts can cause overflow
@@ -197,6 +196,7 @@ void print(unsigned long time, Sensor* sensor) {
 
 void wifi(String ssid, String password, int retry) {
   WiFi.begin(ssid, password);
+  Serial.println(); 
 
   for (int i = 0; i < retry; i++) {
     if (WiFi.status() == WL_CONNECTED) break;
@@ -208,8 +208,6 @@ void wifi(String ssid, String password, int retry) {
 }
 
 void server(String ssid, String password, int retry) {
-  run = false;
-
   if (WiFi.status() != WL_CONNECTED) wifi(ssid, password, retry);
 
   webserver.on("/", HTTP_GET, []() {
