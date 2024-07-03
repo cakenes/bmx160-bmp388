@@ -15,7 +15,7 @@ typedef struct {
 } Sensor;
 
 bool run = true;
-bool serve = false;
+bool serve, powersave = false;
 int frequency = 100; // Hz
 float sensitivity[3] = {16384.0, 16.4, 1};
 Sensor offset;
@@ -34,10 +34,10 @@ const char* serverIndex = R"rawliteral(
 </style>
 <script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>
 <div class="container"> <!-- Wrapper to control width -->
-<form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>
-   <input type='file' name='update'>
-   <input type='submit' value='Update'>
-</form>
+  <form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>
+     <input type='file' name='update'>
+     <input type='submit' value='Update'>
+  </form>
   <div id='progress-container'>
     0% <div id='progress-bar' />
   </div>
@@ -86,9 +86,8 @@ void setup() {
   }
 
   delay(100);
-  calibrate(100);
-
-  // bmx160.setLowPower();
+  calibrate(500);
+  bmx160.setLowPower();
 }
 
 void split(const String& data, std::vector<String>& result) {
@@ -102,41 +101,42 @@ void split(const String& data, std::vector<String>& result) {
   result.push_back(data.substring(start));
 }
 
+void powersave() {
+  if (powersave) bmx160.wakeUp();
+  else bmx160.setLowPower();
+}
+
 void command(std::vector<String>& data) {
   switch (data.size()) {
   case 1:
-    if (data.at(0) == "run") { run = !run; }
-    else if (data.at(0) == "reboot") { ESP.restart(); }
-    else if (data.at(0) == "reset") { bmx160.softReset(); }
-    else if (data.at(0) == "powersave") { bmx160.setLowPower(); }
-    else if (data.at(0) == "wake") { bmx160.wakeUp(); }
+    if (data.at(0) == "run") { run = !run; break; }
+    else if (data.at(0) == "reboot") { ESP.restart(); break; }
+    else if (data.at(0) == "reset") { bmx160.softReset(); break; }
+    else if (data.at(0) == "powersave") { powersave(); break; }
     break;
   case 2:
-    if (data.at(0) == "frequency") { frequency = data.at(1).toInt(); }
-    else if (data.at(0) == "calibrate") { calibrate(data.at(1).toInt()); }
+    if (data.at(0) == "frequency") { frequency = data.at(1).toInt(); break; }
+    else if (data.at(0) == "calibrate") { calibrate(data.at(1).toInt()); break; }
     break;
-  case 3:
-    if (data.at(0) == "wifi") { wifi(data.at(1), data.at(2), data.at(3).toInt()); }
-    else if (data.at(0) == "server") { server(data.at(1), data.at(2), data.at(3).toInt()); }
-    else if (data.at(0) == "sensitivity") { sensitivity[0] = data.at(1).toFloat(); sensitivity[1] = data.at(2).toFloat(); sensitivity[2] = data.at(3).toFloat();  }
+  case 4:
+    if (data.at(0) == "wifi") { server(data.at(1), data.at(2), data.at(3).toInt()); break; }
+    else if (data.at(0) == "sensitivity") { sensitivity[0] = data.at(1).toFloat(); sensitivity[1] = data.at(2).toFloat(); sensitivity[2] = data.at(3).toFloat(); break; }
     break;
   default:
     Serial.println("Command not found or invalid arguments, try:");
-    Serial.println("run");
-    Serial.println("reboot");
-    Serial.println("reset");
-    Serial.println("powersave");
-    Serial.println("wake");
-    Serial.println("frequency <hz as int>");
-    Serial.println("calibrate <count as int>");
-    Serial.println("wifi <ssid as string> <password as string> <retry as int>");
-    Serial.println("server <ssid as string> <password as string> <retry as int>");
-    Serial.println("sensitivity <accel as float> <gyro as float> <mag as float>");
+    Serial.println("run                                                         - Toggles sensor readings");
+    Serial.println("reboot                                                      - Restarts device");
+    Serial.println("reset                                                       - Resets sensors");
+    Serial.println("powersave                                                   - Toggles low power mode");
+    Serial.println("frequency <hz as int>                                       - Sets sensor reading frequency");
+    Serial.println("calibrate <count as int>                                    - Calibrates sensors");
+    Serial.println("wifi <ssid as string> <password as string> <retry as int>   - Connects to wifi and starts web server");
+    Serial.println("sensitivity <accel as float> <gyro as float> <mag as float> - Sets sensor sensitivity");
     break;
   }
 }
 
-void calibrate(int count) { // Counts over 100 can cause overflow for esp8622
+void calibrate(int count) { // High counts can cause overflow
   Sensor temp;
 
   for (int i = 0; i < count; i++) {
