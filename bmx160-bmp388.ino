@@ -92,19 +92,38 @@ void split(const String& data, std::vector<String>& result) {
   result.push_back(data.substring(start));
 }
 
-void read(std::vector<String>& data) {
-  if (data.at(0) == "run") { run = !run; }
-  else if (data.at(0) == "reboot") { ESP.restart(); }
-  else if (data.at(0) == "reset") { bmx160.softReset(); }
-  else if (data.at(0) == "powersave") { bmx160.setLowPower(); }
-  else if (data.at(0) == "wake") { bmx160.wakeUp(); }
-  else if (data.size() <= 1) { Serial.println("Invalid number parameters, 1 required"); }
-  else if (data.at(0) == "frequency") { frequency = data.at(1).toInt(); }
-  else if (data.at(0) == "calibrate") { calibrate(data.at(1).toInt()); }
-  else if (data.size() <= 3) { Serial.println("Invalid number of parameters, 3 required"); }
-  else if (data.at(0) == "wifi") { wifi(data.at(1), data.at(2), data.at(3).toInt()); }
-  else if (data.at(0) == "server") { server(data.at(1), data.at(2), data.at(3).toInt()); }
-  else if (data.at(0) == "sensitivity") { sensitivity[0] = data.at(1).toFloat(); sensitivity[1] = data.at(2).toFloat(); sensitivity[2] = data.at(3).toFloat();  }
+void command(std::vector<String>& data) {
+  switch (data.size()) {
+  case 1:
+    if (data.at(0) == "run") { run = !run; }
+    else if (data.at(0) == "reboot") { ESP.restart(); }
+    else if (data.at(0) == "reset") { bmx160.softReset(); }
+    else if (data.at(0) == "powersave") { bmx160.setLowPower(); }
+    else if (data.at(0) == "wake") { bmx160.wakeUp(); }
+    break;
+  case 2:
+    if (data.at(0) == "frequency") { frequency = data.at(1).toInt(); }
+    else if (data.at(0) == "calibrate") { calibrate(data.at(1).toInt()); }
+    break;
+  case 3:
+    if (data.at(0) == "wifi") { wifi(data.at(1), data.at(2), data.at(3).toInt()); }
+    else if (data.at(0) == "server") { server(data.at(1), data.at(2), data.at(3).toInt()); }
+    else if (data.at(0) == "sensitivity") { sensitivity[0] = data.at(1).toFloat(); sensitivity[1] = data.at(2).toFloat(); sensitivity[2] = data.at(3).toFloat();  }
+    break;
+  default:
+    Serial.println("Command not found or invalid arguments, try:");
+    Serial.println("run");
+    Serial.println("reboot");
+    Serial.println("reset");
+    Serial.println("powersave");
+    Serial.println("wake");
+    Serial.println("frequency <hz as int>");
+    Serial.println("calibrate <count as int>");
+    Serial.println("wifi <ssid as string> <password as string> <retry as int>");
+    Serial.println("server <ssid as string> <password as string> <retry as int>");
+    Serial.println("sensitivity <accel as float> <gyro as float> <mag as float>");
+    break;
+  }
 }
 
 void calibrate(int count) { // Counts over 100 can cause overflow for esp8622
@@ -217,7 +236,7 @@ void loop(){
     String input = Serial.readStringUntil('\n');
     std::vector<String> parts;
     split(input, parts);
-    read(parts);
+    command(parts);
   }
 
   if (serve) {
