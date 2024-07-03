@@ -138,14 +138,20 @@ void command(std::vector<String>& data) {
 
 void calibrate(int count) { // High counts can cause overflow
   Sensor temp;
+  
+  for (int c = 0; c < 3; c++) { // Initialize to avoid overflow
+    temp.imu[c].x = 0.0;
+    temp.imu[c].y = 0.0;
+    temp.imu[c].z = 0.0;
+  }
 
   for (int i = 0; i < count; i++) {
     unsigned long start = micros();
     bmx160.getAllData(&offset.imu[0], &offset.imu[1], &offset.imu[2]);
-    for (int i = 0; i < 3; i++) {
-      temp.imu[i].x += offset.imu[i].x;
-      temp.imu[i].y += offset.imu[i].y;
-      temp.imu[i].z += offset.imu[i].z;
+    for (int a = 0; a < 3; a++) {
+      temp.imu[a].x += offset.imu[a].x;
+      temp.imu[a].y += offset.imu[a].y;
+      temp.imu[a].z += offset.imu[a].z;
     }
 
     unsigned long end = micros();
@@ -154,15 +160,15 @@ void calibrate(int count) { // High counts can cause overflow
     if (elapsed < delay) delayMicroseconds(delay - elapsed);
   }
 
-  Serial.println("Calibration done: ");
+  Serial.println(); Serial.println("Calibration done: ");
 
-  for (int i = 0; i < 3; i++) {
-    offset.imu[i].x = temp.imu[i].x / count;
-    offset.imu[i].y = temp.imu[i].y / count;
-    offset.imu[i].z = temp.imu[i].z / count;
-    if (i == 2) offset.imu[i].z += 10; // Offset mag Z by 10 to calibrate right side up
+  for (int b = 0; b < 3; b++) {
+    offset.imu[b].x = temp.imu[b].x / count;
+    offset.imu[b].y = temp.imu[b].y / count;
+    offset.imu[b].z = temp.imu[b].z / count;
+    if (b == 2) offset.imu[b].z += 10; // Offset mag Z by 10 to calibrate right side up
 
-    Serial.print("X: "); Serial.print(offset.imu[i].x, 7); Serial.print("Y: "); Serial.print(offset.imu[i].y, 7); Serial.print("Z: "); Serial.println(offset.imu[i].z, 7); 
+    Serial.print("X: "); Serial.print(offset.imu[b].x, 7); Serial.print(" Y: "); Serial.print(offset.imu[b].y, 7); Serial.print(" Z: "); Serial.println(offset.imu[b].z, 7); 
   }
 }
 
