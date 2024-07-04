@@ -15,7 +15,8 @@ typedef struct {
 } Sensor;
 
 bool run = true;
-bool serve, powermode = false;
+bool serve = false;
+bool powermode = false;
 int frequency = 100; // Hz
 float sensitivity[3] = {16384.0, 16.4, 1};
 Sensor offset;
@@ -30,7 +31,7 @@ const char* serverIndex = R"rawliteral(
   input[type="submit"] { background-color: #4CAF50; color: white; border-radius: 4px; cursor: pointer; }
   input[type="submit"]:hover { background-color: #45a049; }
   #progress-container { width: calc(100% + 40px); background-color: #ddd; border-radius: 5px; border: 1px solid rgba(0,0,0,0.1); text-align: center; }
-  #progress-bar { width: 0%; height: 20px; background-color: #4CAF50; margin-top: -20px; }
+  #progress-bar { width: 0%; height: 20px; background-color: #4CAF50; margin-top: -18px; border-radius: 5px; }
 </style>
 <script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>
 <div class="container"> <!-- Wrapper to control width -->
@@ -39,7 +40,8 @@ const char* serverIndex = R"rawliteral(
      <input type='submit' value='Update'>
   </form>
   <div id='progress-container'>
-    0% <div id='progress-bar' />
+    <span id="progress-text">0%</span>
+    <div id='progress-bar'></div>
   </div>
 </div>
 <script>
@@ -57,7 +59,7 @@ const char* serverIndex = R"rawliteral(
           if (evt.lengthComputable) {
             var percentComplete = Math.round((evt.loaded / evt.total) * 100);
             $('#progress-bar').width(percentComplete + '%');
-            $('#progress-container').text(percentComplete + '%');
+            $('#progress-text').text(percentComplete + '%');
           }
         });
         return xhr;
