@@ -118,7 +118,7 @@ void powersave() {
 void command(std::vector<String>& data) {
   switch (data.size()) {
     case 1:
-      if (data.at(0) == "reboot") {
+      if (data.at(0) == "restart") {
         ESP.restart();
         return;
       } else if (data.at(0) == "reset") {
@@ -161,14 +161,14 @@ void command(std::vector<String>& data) {
 
   Serial.println();
   Serial.println("Command not found or invalid arguments, try:");
-  Serial.println("reboot  -  Restarts device");
+  Serial.println("restart  -  Restarts device");
   Serial.println("reset  -  Resets sensors");
   Serial.println("powersave  -  Toggles low power mode");
-  Serial.println("mode <mode as string>  -  Toggles sensor mode <off, record(default), realtime> ");
-  Serial.println("frequency <hz as int>  -  Sets sensor reading frequency");
+  Serial.println("mode <mode as string>  -  Toggles sensor mode (off, record, realtime) - default: record");
+  Serial.println("frequency <hz as int>  -  Sets sensor reading frequency - default: 100hz");
   Serial.println("calibrate <count as int>  -  Calibrates sensors");
   Serial.println("wifi <ssid as string> <password as string> <retry as int>  -  Connects to wifi and starts web server");
-  Serial.println("sensitivity <accel as float> <gyro as float> <mag as float> <record as float>  -  Sets sensor sensitivity");
+  Serial.println("sensitivity <accel as float> <gyro as float> <mag as float> <record as float>  -  Sets sensor sensitivity - default: 16384.0 16.4 1 0.005");
 }
 
 void calibrate(int count) {
