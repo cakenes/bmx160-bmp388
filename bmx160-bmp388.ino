@@ -31,7 +31,7 @@ bool serve = false;
 bool powermode = false;
 int frequency = 100;
 int count = 0;
-float sensitivity[4] = { 16384.0, 16.4, 1, 0.001 };
+float sensitivity[4] = { 16384.0, 16.4, 1, 0.005 };
 Sensor offset;
 Record record[3600];
 WebServer webserver(80);
@@ -330,27 +330,23 @@ void loop() {
     case Mode::record:
       {
         sensors(&temp);
-        if (((fabs(temp.imu[0].x - offset.imu[0].x) / sensitivity[0]) <= sensitivity[3]) && ((fabs(temp.imu[0].y - offset.imu[0].y) / sensitivity[0]) <= sensitivity[3]) && ((fabs(temp.imu[0].z - offset.imu[0].z) / sensitivity[0]) <= sensitivity[3])) {
-          if (count == 0) break;
-          else {
-            if (count < 50) {
-              count = 0;
-            } else {
-              Serial.println();
-              Serial.println("Recorded data: ");
-              for (int i = 0; i < count; i++) {
-                print(record[i].time, &record[i].sensor);
-                record[i] = Record();
-              }
-              count = 0;
-            }
-          }
-          break;
-        } else {
+        if (((fabs(temp.imu[0].x - offset.imu[0].x) / sensitivity[0]) > sensitivity[3]) || 
+            ((fabs(temp.imu[0].y - offset.imu[0].y) / sensitivity[0]) > sensitivity[3]) || 
+            ((fabs(temp.imu[0].z - offset.imu[0].z) / sensitivity[0]) > sensitivity[3])) {
           if (count == 3600) count = 0;
           record[count].sensor = temp;
           record[count].time = start;
           count++;
+        } else {
+          if (count >= 50) {
+            Serial.println();
+            Serial.println("Recorded data: ");
+            for (int i = 0; i < count; i++) {
+              print(record[i].time, &record[i].sensor);
+              record[i] = Record();
+            }
+          }
+          count = 0;
         }
         break;
       }
