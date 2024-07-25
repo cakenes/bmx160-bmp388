@@ -164,7 +164,7 @@ void command(std::vector<String>& data) {
   Serial.println("reboot  -  Restarts device");
   Serial.println("reset  -  Resets sensors");
   Serial.println("powersave  -  Toggles low power mode");
-  Serial.println("mode <mode as string>  -  Toggles sensor mode ");
+  Serial.println("mode <mode as string>  -  Toggles sensor mode <off, record(default), realtime> ");
   Serial.println("frequency <hz as int>  -  Sets sensor reading frequency");
   Serial.println("calibrate <count as int>  -  Calibrates sensors");
   Serial.println("wifi <ssid as string> <password as string> <retry as int>  -  Connects to wifi and starts web server");
