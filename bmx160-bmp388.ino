@@ -35,52 +35,52 @@ int frequency[3] = { 100, 100, 10 };                 // [0] = current, [1] = tar
 float sensitivity[4] = { 16384.0, 16.4, 1, 0.005 };  // [0] = accel, [1] = gyro, [2] = mag, [3] = record
 
 const char* serverIndex = R"rawliteral(
-<style>
-  body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; margin: 0px; }
-  .container { display: flex; flex-direction: column; align-items: center; width: 50%; }
-  form { display: flex; background-color: #f2f2f2; padding: 20px; border-radius: 5px; border: 1px solid rgba(0,0,0,0.1); width: 100%; }
-  input[type="file"], input[type="submit"] { padding: 10px 20px; border: none; width: calc(100% - 40px); }
-  input[type="submit"] { background-color: #4CAF50; color: white; border-radius: 4px; cursor: pointer; }
-  input[type="submit"]:hover { background-color: #45a049; }
-  #progress-container { width: calc(100% + 40px); background-color: #ddd; border-radius: 5px; border: 1px solid rgba(0,0,0,0.1); text-align: center; }
-  #progress-bar { width: 0%; height: 20px; background-color: #4CAF50; margin-top: -18px; border-radius: 5px; }
-</style>
-<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>
-<div class="container"> <!-- Wrapper to control width -->
-  <form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>
-     <input type='file' name='update'>
-     <input type='submit' value='Update'>
-  </form>
-  <div id='progress-container'>
-    <span id="progress-text">0%</span>
-    <div id='progress-bar'></div>
+  <style>
+    body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; margin: 0px; }
+    .container { display: flex; flex-direction: column; align-items: center; width: 50%; }
+    form { display: flex; background-color: #f2f2f2; padding: 20px; border-radius: 5px; border: 1px solid rgba(0,0,0,0.1); width: 100%; }
+    input[type="file"], input[type="submit"] { padding: 10px 20px; border: none; width: calc(100% - 40px); }
+    input[type="submit"] { background-color: #4CAF50; color: white; border-radius: 4px; cursor: pointer; }
+    input[type="submit"]:hover { background-color: #45a049; }
+    #progress-container { width: calc(100% + 40px); background-color: #ddd; border-radius: 5px; border: 1px solid rgba(0,0,0,0.1); text-align: center; }
+    #progress-bar { width: 0%; height: 20px; background-color: #4CAF50; margin-top: -18px; border-radius: 5px; }
+  </style>
+  <script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>
+  <div class="container"> <!-- Wrapper to control width -->
+    <form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>
+      <input type='file' name='update'>
+      <input type='submit' value='Update'>
+    </form>
+    <div id='progress-container'>
+      <span id="progress-text">0%</span>
+      <div id='progress-bar'></div>
+    </div>
   </div>
-</div>
-<script>
-  $('#upload_form').submit(function(e){
-    e.preventDefault();
-    $.ajax({
-      url: '/update',
-      type: 'POST',
-      data: new FormData(this),
-      contentType: false,
-      processData: false,
-      xhr: () => {
-        var xhr = new window.XMLHttpRequest();
-        xhr.upload.addEventListener('progress', evt => {
-          if (evt.lengthComputable) {
-            var percentComplete = Math.round((evt.loaded / evt.total) * 100);
-            $('#progress-bar').width(percentComplete + '%');
-            $('#progress-text').text(percentComplete + '%');
-          }
-        });
-        return xhr;
-      },
-      success: () => console.log('success!'),
-      error: () => console.log('error!')
+  <script>
+    $('#upload_form').submit(function(e){
+      e.preventDefault();
+      $.ajax({
+        url: '/update',
+        type: 'POST',
+        data: new FormData(this),
+        contentType: false,
+        processData: false,
+        xhr: () => {
+          var xhr = new window.XMLHttpRequest();
+          xhr.upload.addEventListener('progress', evt => {
+            if (evt.lengthComputable) {
+              var percentComplete = Math.round((evt.loaded / evt.total) * 100);
+              $('#progress-bar').width(percentComplete + '%');
+              $('#progress-text').text(percentComplete + '%');
+            }
+          });
+          return xhr;
+        },
+        success: () => console.log('success!'),
+        error: () => console.log('error!')
+      });
     });
-  });
-</script>
+  </script>
 )rawliteral";
 
 void setup() {
@@ -247,8 +247,6 @@ void print(unsigned long time, float* sensor, size_t sensorSize) {
 }
 
 void wifi(String ssid, String password, int retry) {
-
-
   WiFi.begin(ssid, password);
   Serial.println();
 
