@@ -9,80 +9,78 @@
 DFRobot_BMX160 bmx160;
 DFRobot_BMP388_I2C bmp388(&Wire, bmp388.eSDOGND);
 
-typedef struct {
-  sBmx160SensorData_t imu[3];
-  float baro[3];
-} Sensor;
+float sensor[12];
+float offset[9];
 
 typedef struct {
-  Sensor sensor;
   unsigned long time;
+  float sensor[12];
 } Record;
 
 enum class Mode {
   off,
   record,
-  realtime
+  debug
 };
 
-Mode mode = Mode::record;
-bool run = true;
-bool serve = false;
-bool powermode = false;
-int frequency = 100;
-int count = 0;
-float sensitivity[4] = { 16384.0, 16.4, 1, 0.005 };
-Sensor offset;
-Record record[3600];
+const int STOP_THRESHOLD_LIMIT = 10;
+const int RECORD_BUFFER_SIZE = 3600;
+const int MIN_RECORD_SIZE = 50;
+
 WebServer webserver(80);
+Mode mode = Mode::record;
+Record record[RECORD_BUFFER_SIZE];
+bool powermode = false;
+int frequency[3] = { 100, 100, 10 };                 // [0] = current, [1] = target, [2] = divider
+float sensitivity[4] = { 16384.0, 16.4, 1, 0.005 };  // [0] = accel, [1] = gyro, [2] = mag, [3] = record
 
 const char* serverIndex = R"rawliteral(
-<style>
-  body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; margin: 0px; }
-  .container { display: flex; flex-direction: column; align-items: center; width: 50%; }
-  form { display: flex; background-color: #f2f2f2; padding: 20px; border-radius: 5px; border: 1px solid rgba(0,0,0,0.1); width: 100%; }
-  input[type="file"], input[type="submit"] { padding: 10px 20px; border: none; width: calc(100% - 40px); }
-  input[type="submit"] { background-color: #4CAF50; color: white; border-radius: 4px; cursor: pointer; }
-  input[type="submit"]:hover { background-color: #45a049; }
-  #progress-container { width: calc(100% + 40px); background-color: #ddd; border-radius: 5px; border: 1px solid rgba(0,0,0,0.1); text-align: center; }
-  #progress-bar { width: 0%; height: 20px; background-color: #4CAF50; margin-top: -18px; border-radius: 5px; }
-</style>
-<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>
-<div class="container"> <!-- Wrapper to control width -->
-  <form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>
-     <input type='file' name='update'>
-     <input type='submit' value='Update'>
-  </form>
-  <div id='progress-container'>
-    <span id="progress-text">0%</span>
-    <div id='progress-bar'></div>
+  <style>
+    body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; margin: 0px; }
+    .container { display: flex; flex-direction: column; align-items: center; width: 50%; }
+    form { display: flex; background-color: #f2f2f2; padding: 20px; border-radius: 5px; border: 1px solid rgba(0,0,0,0.1); width: 100%; }
+    input[type="file"], input[type="submit"] { padding: 10px 20px; border: none; width: calc(100% - 40px); }
+    input[type="submit"] { background-color: #4CAF50; color: white; border-radius: 4px; cursor: pointer; }
+    input[type="submit"]:hover { background-color: #45a049; }
+    #progress-container { width: calc(100% + 40px); background-color: #ddd; border-radius: 5px; border: 1px solid rgba(0,0,0,0.1); text-align: center; }
+    #progress-bar { width: 0%; height: 20px; background-color: #4CAF50; margin-top: -18px; border-radius: 5px; }
+  </style>
+  <script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>
+  <div class="container"> <!-- Wrapper to control width -->
+    <form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>
+      <input type='file' name='update'>
+      <input type='submit' value='Update'>
+    </form>
+    <div id='progress-container'>
+      <span id="progress-text">0%</span>
+      <div id='progress-bar'></div>
+    </div>
   </div>
-</div>
-<script>
-  $('#upload_form').submit(function(e){
-    e.preventDefault();
-    $.ajax({
-      url: '/update',
-      type: 'POST',
-      data: new FormData(this),
-      contentType: false,
-      processData: false,
-      xhr: () => {
-        var xhr = new window.XMLHttpRequest();
-        xhr.upload.addEventListener('progress', evt => {
-          if (evt.lengthComputable) {
-            var percentComplete = Math.round((evt.loaded / evt.total) * 100);
-            $('#progress-bar').width(percentComplete + '%');
-            $('#progress-text').text(percentComplete + '%');
-          }
-        });
-        return xhr;
-      },
-      success: () => console.log('success!'),
-      error: () => console.log('error!')
+  <script>
+    $('#upload_form').submit(function(e){
+      e.preventDefault();
+      $.ajax({
+        url: '/update',
+        type: 'POST',
+        data: new FormData(this),
+        contentType: false,
+        processData: false,
+        xhr: () => {
+          var xhr = new window.XMLHttpRequest();
+          xhr.upload.addEventListener('progress', evt => {
+            if (evt.lengthComputable) {
+              var percentComplete = Math.round((evt.loaded / evt.total) * 100);
+              $('#progress-bar').width(percentComplete + '%');
+              $('#progress-text').text(percentComplete + '%');
+            }
+          });
+          return xhr;
+        },
+        success: () => console.log('success!'),
+        error: () => console.log('error!')
+      });
     });
-  });
-</script>
+  </script>
 )rawliteral";
 
 void setup() {
@@ -95,6 +93,7 @@ void setup() {
   if (!bmx160.begin()) Serial.println("bmx160 Initialization failed");
 
   delay(100);
+  calibrate(100);
   calibrate(100);
 }
 
@@ -129,26 +128,33 @@ void command(std::vector<String>& data) {
         return;
       }
       break;
+      
     case 2:
       if (data.at(0) == "mode") {
-        if (data.at(1) == "off") mode = Mode::off;
-        else if (data.at(1) == "record") mode = Mode::record;
-        else if (data.at(1) == "realtime") mode = Mode::realtime;
+        if (data.at(1) == "off") {
+          mode = Mode::off;
+          return;
+        } else if (data.at(1) == "record") mode = Mode::record;
+        else if (data.at(1) == "debug") mode = Mode::debug;
+        webserver.stop();
+        WiFi.disconnect();
         return;
       } else if (data.at(0) == "frequency") {
-        frequency = data.at(1).toInt();
+        frequency[1] = data.at(1).toInt();
         return;
       } else if (data.at(0) == "calibrate") {
         calibrate(data.at(1).toInt());
         return;
       }
       break;
+
     case 4:
       if (data.at(0) == "wifi") {
-        server(data.at(1), data.at(2), data.at(3).toInt());
+        wifi(data.at(1), data.at(2), data.at(3).toInt());
         return;
       }
       break;
+
     case 5:
       if (data.at(0) == "sensitivity") {
         sensitivity[0] = data.at(1).toFloat();
@@ -164,7 +170,7 @@ void command(std::vector<String>& data) {
   Serial.println("restart  -  Restarts device");
   Serial.println("reset  -  Resets sensors");
   Serial.println("powersave  -  Toggles low power mode");
-  Serial.println("mode <mode as string>  -  Toggles sensor mode (off, record, realtime) - default: record");
+  Serial.println("mode <mode as string>  -  Toggles sensor mode (off, record, debug) - default: record");
   Serial.println("frequency <hz as int>  -  Sets sensor reading frequency - default: 100hz");
   Serial.println("calibrate <count as int>  -  Calibrates sensors");
   Serial.println("wifi <ssid as string> <password as string> <retry as int>  -  Connects to wifi and starts web server");
@@ -172,21 +178,21 @@ void command(std::vector<String>& data) {
 }
 
 void calibrate(int count) {
-  Sensor temp;
+  sBmx160SensorData_t imu[3][count];
+  sBmx160SensorData_t imuOffset[3];
 
-  for (int c = 0; c < 3; c++) {  // Itniialize to avoid overflow
-    temp.imu[c].x = 0.0;
-    temp.imu[c].y = 0.0;
-    temp.imu[c].z = 0.0;
+  for (size_t i = 0; i < 9; i++) {  // Reset to avoid overflow
+    offset[i] = 0.0;
   }
 
-  for (int i = 0; i < count; i++) {
+  for (size_t i = 0; i < count; i++) {
     unsigned long start = micros();
-    bmx160.getAllData(&offset.imu[0], &offset.imu[1], &offset.imu[2]);
-    for (int a = 0; a < 3; a++) {
-      temp.imu[a].x += offset.imu[a].x;
-      temp.imu[a].y += offset.imu[a].y;
-      temp.imu[a].z += offset.imu[a].z;
+    bmx160.getAllData(&imu[0][i], &imu[1][i], &imu[2][i]);
+
+    for (size_t a = 0; a < 3; a++) {
+      offset[a * 3] += imu[a][i].x;
+      offset[a * 3 + 1] += imu[a][i].y;
+      offset[a * 3 + 2] += imu[a][i].z;
     }
 
     unsigned long end = micros();
@@ -195,64 +201,56 @@ void calibrate(int count) {
     if (elapsed < delay) delayMicroseconds(delay - elapsed);
   }
 
-  Serial.println();
-  Serial.println("Calibration done: ");
+  for (size_t b = 0; b < 3; b++) {
+    offset[b * 3] /= count;
+    offset[b * 3 + 1] /= count;
+    offset[b * 3 + 2] /= count;
+    if (b == 2) offset[b * 3 + 2] += 10;  // Offset mag Z by 10 to calibrate right side up
+  }
 
-  for (int b = 0; b < 3; b++) {
-    offset.imu[b].x = temp.imu[b].x / count;
-    offset.imu[b].y = temp.imu[b].y / count;
-    offset.imu[b].z = temp.imu[b].z / count;
-    if (b == 2) offset.imu[b].z += 10;  // Offset mag Z by 10 to calibrate right side up
-
-    Serial.print("X: ");
-    Serial.print(offset.imu[b].x, 7);
-    Serial.print(" Y: ");
-    Serial.print(offset.imu[b].y, 7);
-    Serial.print(" Z: ");
-    Serial.println(offset.imu[b].z, 7);
+  if (mode != Mode::off) {
+    Serial.println();
+    Serial.println("Calibration done:");
+    for (size_t i = 0; i < 9; i++) {
+      Serial.print(offset[i], 7);
+      if (i == 9 - 1) Serial.println();
+      else if ((i + 1) % 3 == 0) Serial.print(" : ");
+      else Serial.print(",");
+    }
   }
 }
 
-void sensors(Sensor* sensor) {
-  bmx160.getAllData(&sensor->imu[0], &sensor->imu[1], &sensor->imu[2]);
-  sensor->baro[0] = bmp388.readTempC();
-  sensor->baro[1] = bmp388.readPressPa();
-  sensor->baro[2] = bmp388.readAltitudeM();
+void getSensors(float* sensor, const float* offset, const float* sensitivity) {
+  sBmx160SensorData_t imu[3];
+  bmx160.getAllData(&imu[0], &imu[1], &imu[2]);
+
+  for (size_t i = 0; i < 3; ++i) {
+    sensor[i * 3] = (imu[i].x - offset[i * 3]) / sensitivity[i];
+    sensor[i * 3 + 1] = (imu[i].y - offset[i * 3 + 1]) / sensitivity[i];
+    sensor[i * 3 + 2] = (imu[i].z - offset[i * 3 + 2]) / sensitivity[i];
+  }
+
+  sensor[9] = bmp388.readTempC();
+  sensor[10] = bmp388.readPressPa();
+  sensor[11] = bmp388.readAltitudeM();
 }
 
-void print(unsigned long time, Sensor* sensor) {
-  Serial.print(time); // [0] time
-  Serial.print(":");
-  Serial.print((sensor->imu[0].x - offset.imu[0].x) / sensitivity[0], 7); // [1] accel x
-  Serial.print(":");
-  Serial.print((sensor->imu[0].y - offset.imu[0].y) / sensitivity[0], 7); // [2] accel y
-  Serial.print(":");
-  Serial.print((sensor->imu[0].z - offset.imu[0].z) / sensitivity[0], 7); // [3] accel z
-  Serial.print(":");
-  Serial.print((sensor->imu[1].x - offset.imu[1].x) / sensitivity[1], 7); // [4] gyro x
-  Serial.print(":");
-  Serial.print((sensor->imu[1].y - offset.imu[1].y) / sensitivity[1], 7); // [5] gyro y
-  Serial.print(":");
-  Serial.print((sensor->imu[1].z - offset.imu[1].z) / sensitivity[1], 7); // [6] gyro z
-  Serial.print(":");
-  Serial.print((sensor->imu[2].x - offset.imu[2].x) / sensitivity[2], 7); // [7] mag x
-  Serial.print(":");
-  Serial.print((sensor->imu[2].y - offset.imu[2].y) / sensitivity[2], 7); // [8] mag y
-  Serial.print(":");
-  Serial.print((sensor->imu[2].z - offset.imu[2].z) / sensitivity[2], 7); // [9] mag z
-  Serial.print(":");
-  Serial.print(sensor->baro[0], 7); // [10] temp
-  Serial.print(":");
-  Serial.print(sensor->baro[1], 7); // [11] pressure
-  Serial.print(":");
-  Serial.println(sensor->baro[2], 7); // [12] altitude
+void print(unsigned long time, float* sensor, size_t sensorSize) {
+  Serial.print(time);
+  char buffer[15];
+  for (size_t i = 0; i < sensorSize; i++) {
+    Serial.print(":");
+    sprintf(buffer, "%12.7f", sensor[i]);
+    Serial.print(buffer);
+  }
+  Serial.println();
 }
 
 void wifi(String ssid, String password, int retry) {
   WiFi.begin(ssid, password);
   Serial.println();
 
-  for (int i = 0; i < retry; i++) {
+  for (size_t i = 0; i < retry; i++) {
     if (WiFi.status() == WL_CONNECTED) break;
     Serial.println();
     Serial.print("Connecting to: ");
@@ -260,13 +258,16 @@ void wifi(String ssid, String password, int retry) {
     delay(1000);
   }
 
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println();
+    Serial.print("Failed to connect to: ");
+    Serial.println(ssid);
+    return;
+  }
+
   Serial.println();
   Serial.print("Connected to: ");
   Serial.println(ssid);
-}
-
-void server(String ssid, String password, int retry) {
-  if (WiFi.status() != WL_CONNECTED) wifi(ssid, password, retry);
 
   webserver.on("/", HTTP_GET, []() {
     webserver.sendHeader("Connection", "close");
@@ -303,17 +304,22 @@ void server(String ssid, String password, int retry) {
     });
 
   webserver.begin();
-  serve = true;
-
   Serial.println();
   Serial.print("Serving at: ");
   Serial.println(WiFi.localIP());
 }
 
-
+bool shouldRecord(const float* sensor, const float* offset, const float* sensitivity) {
+  float diffX = fabs(sensor[0] - offset[0]) / sensitivity[0];
+  float diffY = fabs(sensor[1] - offset[1]) / sensitivity[0];
+  float diffZ = fabs(sensor[2] - offset[2]) / sensitivity[0];
+  return (diffX > sensitivity[3] || diffY > sensitivity[3] || diffZ > sensitivity[3]);
+}
 
 void loop() {
-  Sensor temp;
+  float imu[12];
+  int stopTreshold = 0;
+  size_t index = 0;
   unsigned long start = micros();
 
   if (Serial.available() > 0) {
@@ -325,42 +331,45 @@ void loop() {
 
   switch (mode) {
     case Mode::off:
-      if (serve) webserver.handleClient();
+      if (WiFi.status() == WL_CONNECTED) webserver.handleClient();
       break;
+
     case Mode::record:
-      {
-        sensors(&temp);
-        if (((fabs(temp.imu[0].x - offset.imu[0].x) / sensitivity[0]) > sensitivity[3]) || 
-            ((fabs(temp.imu[0].y - offset.imu[0].y) / sensitivity[0]) > sensitivity[3]) || 
-            ((fabs(temp.imu[0].z - offset.imu[0].z) / sensitivity[0]) > sensitivity[3])) {
-          if (count == 3600) count = 0;
-          record[count].sensor = temp;
-          record[count].time = start;
-          count++;
-        } else {
-          if (count >= 50) {
+      getSensors(imu, offset, sensitivity);
+      if (index == 0) frequency[0] = frequency[1];
+      if (shouldRecord(imu, offset, sensitivity)) {
+        stopTreshold = 0;
+        if (index == RECORD_BUFFER_SIZE) index = 0;
+        record[index].time = start;
+        memcpy(record[index].sensor, imu, sizeof(imu));
+        index++;
+      } else {
+        stopTreshold++;
+        if (stopTreshold >= STOP_THRESHOLD_LIMIT) {
+          if (index >= MIN_RECORD_SIZE) {
             Serial.println();
             Serial.println("Recorded data: ");
-            for (int i = 0; i < count; i++) {
-              print(record[i].time, &record[i].sensor);
+            for (size_t i = 0; i < index; ++i) {
+              print(record[i].time, &record[i].sensor[0], 12);
               record[i] = Record();
             }
           }
-          count = 0;
+          frequency[0] = frequency[1] / frequency[2];
         }
-        break;
       }
-    case Mode::realtime:
+      break;
+
+    case Mode::debug:
     default:
-      sensors(&temp);
-      print(start, &temp);
+      getSensors(sensor, offset, sensitivity);
+      print(start, sensor, 12);
       break;
   }
 
   if (mode != Mode::off) {
     unsigned long end = micros();
     unsigned long elapsed = end - start;
-    unsigned long delay = (1000000 / frequency);
+    unsigned long delay = (1000000 / frequency[1]);
     if (elapsed < delay) delayMicroseconds(delay - elapsed);
   }
 }
