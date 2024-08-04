@@ -6,7 +6,7 @@
 restart                                                                         -  Restarts device
 reset                                                                           -  Resets sensors
 powersave                                                                       -  Toggles low power mode
-mode <mode as string>                                                           -  Toggles sensor mode (off, record, realtime) - default: record
+mode <mode as string>                                                           -  Toggles sensor mode (off, record, debug) - default: record
 frequency <hz as int>                                                           -  Sets sensor reading frequency - default: 100
 calibrate <count as int>                                                        -  Calibrates sensors
 wifi <ssid as string> <password as string> <retry as int>                       -  Connects to wifi and starts web server
