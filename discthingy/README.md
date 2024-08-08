@@ -6,10 +6,10 @@
 yarn install
 ```
 
-#### Add local.properties file to android/ with:
+### Add local.properties file to android/ with:
 
-Windows: `sdk.dir=C:\\Users\\UserName\\AppData\\Local\\Android\\sdk`
-Mac: `sdk.dir = /Users/USERNAME/Library/Android/sdk`
+Windows: `sdk.dir=C:\\Users\\UserName\\AppData\\Local\\Android\\sdk`<br>
+Mac: `sdk.dir = /Users/USERNAME/Library/Android/sdk`<br>
 Linux: `sdk.dir = /home/USERNAME/Android/Sdk`
 
 ### For iOS
