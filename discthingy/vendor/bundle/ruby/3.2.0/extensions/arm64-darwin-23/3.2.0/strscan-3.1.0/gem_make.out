@@ -1,0 +1,21 @@
+current directory: /Users/Used/git/bmx160-bmp388/discthingy/vendor/bundle/ruby/3.2.0/gems/strscan-3.1.0/ext/strscan
+/Users/Used/.rbenv/versions/3.2.3/bin/ruby extconf.rb
+checking for onig_region_memsize() in ruby.h... yes
+checking for rb_reg_onig_match() in ruby.h... no
+creating Makefile
+
+current directory: /Users/Used/git/bmx160-bmp388/discthingy/vendor/bundle/ruby/3.2.0/gems/strscan-3.1.0/ext/strscan
+make DESTDIR\= sitearchdir\=./.gem.20240807-24162-hj72ww sitelibdir\=./.gem.20240807-24162-hj72ww clean
+
+current directory: /Users/Used/git/bmx160-bmp388/discthingy/vendor/bundle/ruby/3.2.0/gems/strscan-3.1.0/ext/strscan
+make DESTDIR\= sitearchdir\=./.gem.20240807-24162-hj72ww sitelibdir\=./.gem.20240807-24162-hj72ww
+compiling strscan.c
+linking shared-object strscan.bundle
+ld: warning: ignoring duplicate libraries: '-lruby.3.2'
+
+current directory: /Users/Used/git/bmx160-bmp388/discthingy/vendor/bundle/ruby/3.2.0/gems/strscan-3.1.0/ext/strscan
+make DESTDIR\= sitearchdir\=./.gem.20240807-24162-hj72ww sitelibdir\=./.gem.20240807-24162-hj72ww install
+/usr/bin/install -c -m 0755 strscan.bundle ./.gem.20240807-24162-hj72ww
+
+current directory: /Users/Used/git/bmx160-bmp388/discthingy/vendor/bundle/ruby/3.2.0/gems/strscan-3.1.0/ext/strscan
+make DESTDIR\= sitearchdir\=./.gem.20240807-24162-hj72ww sitelibdir\=./.gem.20240807-24162-hj72ww clean
