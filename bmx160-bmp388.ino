@@ -30,6 +30,8 @@ const int MIN_RECORD_SIZE = 50;
 WebServer webserver(80);
 Mode mode = Mode::record;
 Record record[RECORD_BUFFER_SIZE];
+int recordIndex = 0;
+int stopTreshold = 0;
 bool powermode = false;
 int frequency[3] = { 100, 100, 10 };                 // [0] = current, [1] = target, [2] = divider
 float sensitivity[4] = { 16384.0, 16.4, 1, 0.005 };  // [0] = accel, [1] = gyro, [2] = mag, [3] = record
@@ -309,17 +311,12 @@ void wifi(String ssid, String password, int retry) {
   Serial.println(WiFi.localIP());
 }
 
-bool shouldRecord(const float* sensor, const float* offset, const float* sensitivity) {
-  float diffX = fabs(sensor[0] - offset[0]) / sensitivity[0];
-  float diffY = fabs(sensor[1] - offset[1]) / sensitivity[0];
-  float diffZ = fabs(sensor[2] - offset[2]) / sensitivity[0];
-  return (diffX > sensitivity[3] || diffY > sensitivity[3] || diffZ > sensitivity[3]);
+bool shouldRecord(const float* sensor, const float* sensitivity) {
+  return (fabs(sensor[0]) > sensitivity[3] || fabs(sensor[1]) > sensitivity[3] || fabs(sensor[2]) > sensitivity[3]);
 }
 
 void loop() {
   float imu[12];
-  int stopTreshold = 0;
-  size_t index = 0;
   unsigned long start = micros();
 
   if (Serial.available() > 0) {
@@ -336,24 +333,25 @@ void loop() {
 
     case Mode::record:
       getSensors(imu, offset, sensitivity);
-      if (index == 0) frequency[0] = frequency[1];
-      if (shouldRecord(imu, offset, sensitivity)) {
+      if (recordIndex == 0) frequency[0] = frequency[1];
+      if (shouldRecord(imu, sensitivity)) {
         stopTreshold = 0;
-        if (index == RECORD_BUFFER_SIZE) index = 0;
-        record[index].time = start;
-        memcpy(record[index].sensor, imu, sizeof(imu));
-        index++;
+        if (recordIndex == RECORD_BUFFER_SIZE) recordIndex = 0;
+        record[recordIndex].time = start;
+        memcpy(record[recordIndex].sensor, imu, sizeof(imu));
+        recordIndex++;
       } else {
         stopTreshold++;
         if (stopTreshold >= STOP_THRESHOLD_LIMIT) {
-          if (index >= MIN_RECORD_SIZE) {
+          if (recordIndex >= MIN_RECORD_SIZE) {
             Serial.println();
             Serial.println("Recorded data: ");
-            for (size_t i = 0; i < index; ++i) {
+            for (size_t i = 0; i < recordIndex; ++i) {
               print(record[i].time, &record[i].sensor[0], 12);
               record[i] = Record();
             }
           }
+          recordIndex = 0;
           frequency[0] = frequency[1] / frequency[2];
         }
       }

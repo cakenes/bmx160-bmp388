@@ -60,3 +60,6 @@ buck-out/
 # Ruby / CocoaPods
 **/Pods/
 */vendor/bundle/
+
+# Vscode
+*.vscode
