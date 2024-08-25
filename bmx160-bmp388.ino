@@ -374,13 +374,16 @@ JsonDocument generateReport() {
 
   report["time"] = micros();
 
-  JsonArray data = report.add<JsonArray>();
+  JsonArray data = report.createNestedArray("data");
 
   for (size_t i = 0; i < RECORD_BUFFER_SIZE; i++) {
-    JsonObject recordData = report.add<JsonObject>();
-    JsonArray magArray = report.add<JsonArray>();
-    JsonArray gyroArray = report.add<JsonArray>();
-    JsonArray accellArray = report.add<JsonArray>();
+    Serial.print("Handling index");
+    Serial.println(i);
+    JsonObject recordData = data.createNestedObject();
+    recordData["time"] = record[i].time;
+    JsonArray magArray = recordData["mag"].to<JsonArray>();
+    JsonArray gyroArray = recordData["gyro"].to<JsonArray>();
+    JsonArray accellArray = recordData["accell"].to<JsonArray>();
 
     magArray.add(record[i].sensor[0]);
     magArray.add(record[i].sensor[1]);
@@ -393,14 +396,7 @@ JsonDocument generateReport() {
     accellArray.add(record[i].sensor[6]);
     accellArray.add(record[i].sensor[7]);
     accellArray.add(record[i].sensor[8]);
-
-    recordData["mag"] = magArray;
-    recordData["gyro"] = gyroArray;
-    recordData["accell"] = accellArray;
-    data.add(recordData);
   }
-
-  report["data"] = data;
 
   Serial.println("Report generated");
   return report;
@@ -426,33 +422,38 @@ void loop() {
       getSensors(imu, offset, sensitivity);
       if (recordIndex == 0) frequency[0] = frequency[1];
       if (shouldRecord(imu, sensitivity)) {
-        Serial.println("Starting recording...");
+        //Serial.println("Starting recording...");
         stopTreshold = 0;
         if (recordIndex == RECORD_BUFFER_SIZE) recordIndex = 0;
         record[recordIndex].time = start;
         memcpy(record[recordIndex].sensor, imu, sizeof(imu));
         recordIndex++;
       } else {
-        Serial.print("Recording, current stop treshold: ");
-        Serial.println(stopTreshold);
+        //Serial.print("Recording, current stop treshold: ");
+        //Serial.println(stopTreshold);
         stopTreshold++;
         if (stopTreshold >= STOP_THRESHOLD_LIMIT) {
           if (recordIndex >= MIN_RECORD_SIZE) {
             Serial.println();
+            
+            // Debug
+            JsonDocument report = generateReport();
+            serializeJsonPretty(report, Serial);
+
             Serial.println("Recorded data: ");
             for (size_t i = 0; i < recordIndex; ++i) {
               print(record[i].time, &record[i].sensor[0], 12);
               record[i] = Record();
             }
 
-            // Debug
-            JsonDocument report = generateReport();
-            serializeJson(report, Serial);
+            
 
             // Relay the recorded data to a connected client with BLE
             if (bleClientConnected) {
               Serial.println("Sending recorded data to connected client over BLE...");
-
+              String message;
+              serializeJson(report, message);
+              bleChunkService.notifyMessage(message);
               Serial.println("Data sent over BLE");
             }
           }
