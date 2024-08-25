@@ -48,6 +48,8 @@ const int MIN_RECORD_SIZE = 50;
 WebServer webserver(80);
 Mode mode = Mode::record;
 Record record[RECORD_BUFFER_SIZE];
+int recordIndex = 0;
+int stopTreshold = 0;
 bool powermode = false;
 bool bmp388_ok = true;
 int frequency[3] = { 100, 100, 10 };                 // [0] = current, [1] = target, [2] = divider
@@ -68,52 +70,52 @@ class BLEServerCallback : public BLEServerCallbacks {
 };
 
 const char* serverIndex = R"rawliteral(
-<style>
-  body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; margin: 0px; }
-  .container { display: flex; flex-direction: column; align-items: center; width: 50%; }
-  form { display: flex; background-color: #f2f2f2; padding: 20px; border-radius: 5px; border: 1px solid rgba(0,0,0,0.1); width: 100%; }
-  input[type="file"], input[type="submit"] { padding: 10px 20px; border: none; width: calc(100% - 40px); }
-  input[type="submit"] { background-color: #4CAF50; color: white; border-radius: 4px; cursor: pointer; }
-  input[type="submit"]:hover { background-color: #45a049; }
-  #progress-container { width: calc(100% + 40px); background-color: #ddd; border-radius: 5px; border: 1px solid rgba(0,0,0,0.1); text-align: center; }
-  #progress-bar { width: 0%; height: 20px; background-color: #4CAF50; margin-top: -18px; border-radius: 5px; }
-</style>
-<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>
-<div class="container"> <!-- Wrapper to control width -->
-  <form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>
-     <input type='file' name='update'>
-     <input type='submit' value='Update'>
-  </form>
-  <div id='progress-container'>
-    <span id="progress-text">0%</span>
-    <div id='progress-bar'></div>
+  <style>
+    body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; margin: 0px; }
+    .container { display: flex; flex-direction: column; align-items: center; width: 50%; }
+    form { display: flex; background-color: #f2f2f2; padding: 20px; border-radius: 5px; border: 1px solid rgba(0,0,0,0.1); width: 100%; }
+    input[type="file"], input[type="submit"] { padding: 10px 20px; border: none; width: calc(100% - 40px); }
+    input[type="submit"] { background-color: #4CAF50; color: white; border-radius: 4px; cursor: pointer; }
+    input[type="submit"]:hover { background-color: #45a049; }
+    #progress-container { width: calc(100% + 40px); background-color: #ddd; border-radius: 5px; border: 1px solid rgba(0,0,0,0.1); text-align: center; }
+    #progress-bar { width: 0%; height: 20px; background-color: #4CAF50; margin-top: -18px; border-radius: 5px; }
+  </style>
+  <script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>
+  <div class="container"> <!-- Wrapper to control width -->
+    <form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>
+      <input type='file' name='update'>
+      <input type='submit' value='Update'>
+    </form>
+    <div id='progress-container'>
+      <span id="progress-text">0%</span>
+      <div id='progress-bar'></div>
+    </div>
   </div>
-</div>
-<script>
-  $('#upload_form').submit(function(e){
-    e.preventDefault();
-    $.ajax({
-      url: '/update',
-      type: 'POST',
-      data: new FormData(this),
-      contentType: false,
-      processData: false,
-      xhr: () => {
-        var xhr = new window.XMLHttpRequest();
-        xhr.upload.addEventListener('progress', evt => {
-          if (evt.lengthComputable) {
-            var percentComplete = Math.round((evt.loaded / evt.total) * 100);
-            $('#progress-bar').width(percentComplete + '%');
-            $('#progress-text').text(percentComplete + '%');
-          }
-        });
-        return xhr;
-      },
-      success: () => console.log('success!'),
-      error: () => console.log('error!')
+  <script>
+    $('#upload_form').submit(function(e){
+      e.preventDefault();
+      $.ajax({
+        url: '/update',
+        type: 'POST',
+        data: new FormData(this),
+        contentType: false,
+        processData: false,
+        xhr: () => {
+          var xhr = new window.XMLHttpRequest();
+          xhr.upload.addEventListener('progress', evt => {
+            if (evt.lengthComputable) {
+              var percentComplete = Math.round((evt.loaded / evt.total) * 100);
+              $('#progress-bar').width(percentComplete + '%');
+              $('#progress-text').text(percentComplete + '%');
+            }
+          });
+          return xhr;
+        },
+        success: () => console.log('success!'),
+        error: () => console.log('error!')
+      });
     });
-  });
-</script>
+  </script>
 )rawliteral";
 
 void setup() {
@@ -300,8 +302,6 @@ void print(unsigned long time, float* sensor, size_t sensorSize) {
 }
 
 void wifi(String ssid, String password, int retry) {
-
-
   WiFi.begin(ssid, password);
   Serial.println();
 
@@ -364,11 +364,46 @@ void wifi(String ssid, String password, int retry) {
   Serial.println(WiFi.localIP());
 }
 
-bool shouldRecord(const float* sensor, const float* offset, const float* sensitivity) {
-  float diffX = fabs(sensor[0] - offset[0]) / sensitivity[0];
-  float diffY = fabs(sensor[1] - offset[1]) / sensitivity[0];
-  float diffZ = fabs(sensor[2] - offset[2]) / sensitivity[0];
-  return (diffX > sensitivity[3] || diffY > sensitivity[3] || diffZ > sensitivity[3]);
+bool shouldRecord(const float* sensor, const float* sensitivity) {
+  return (fabs(sensor[0]) > sensitivity[3] || fabs(sensor[1]) > sensitivity[3] || fabs(sensor[2]) > sensitivity[3]);
+}
+
+JsonDocument generateReport() {
+  Serial.println("Generating report of recorded data in JSON format...");
+  JsonDocument report;
+
+  report["time"] = micros();
+
+  JsonArray data = report.add<JsonArray>();
+
+  for (size_t i = 0; i < RECORD_BUFFER_SIZE; i++) {
+    JsonObject recordData = report.add<JsonObject>();
+    JsonArray magArray = report.add<JsonArray>();
+    JsonArray gyroArray = report.add<JsonArray>();
+    JsonArray accellArray = report.add<JsonArray>();
+
+    magArray.add(record[i].sensor[0]);
+    magArray.add(record[i].sensor[1]);
+    magArray.add(record[i].sensor[2]);
+
+    gyroArray.add(record[i].sensor[3]);
+    gyroArray.add(record[i].sensor[4]);
+    gyroArray.add(record[i].sensor[5]);
+
+    accellArray.add(record[i].sensor[6]);
+    accellArray.add(record[i].sensor[7]);
+    accellArray.add(record[i].sensor[8]);
+
+    recordData["mag"] = magArray;
+    recordData["gyro"] = gyroArray;
+    recordData["accell"] = accellArray;
+    data.add(recordData);
+  }
+
+  report["data"] = data;
+
+  Serial.println("Report generated");
+  return report;
 }
 
 JsonDocument generateReport() {
@@ -411,8 +446,6 @@ JsonDocument generateReport() {
 
 void loop() {
   float imu[12];
-  int stopTreshold = 0;
-  size_t index = 0;
   unsigned long start = micros();
 
   if (Serial.available() > 0) {
@@ -429,23 +462,23 @@ void loop() {
 
     case Mode::record:
       getSensors(imu, offset, sensitivity);
-      if (index == 0) frequency[0] = frequency[1];
-      if (shouldRecord(imu, offset, sensitivity)) {
+      if (recordIndex == 0) frequency[0] = frequency[1];
+      if (shouldRecord(imu, sensitivity)) {
         Serial.println("Starting recording...");
         stopTreshold = 0;
-        if (index == RECORD_BUFFER_SIZE) index = 0;
-        record[index].time = start;
-        memcpy(record[index].sensor, imu, sizeof(imu));
-        index++;
+        if (recordIndex == RECORD_BUFFER_SIZE) recordIndex = 0;
+        record[recordIndex].time = start;
+        memcpy(record[recordIndex].sensor, imu, sizeof(imu));
+        recordIndex++;
       } else {
         Serial.print("Recording, current stop treshold: ");
         Serial.println(stopTreshold);
         stopTreshold++;
         if (stopTreshold >= STOP_THRESHOLD_LIMIT) {
-          if (index >= MIN_RECORD_SIZE) {
+          if (recordIndex >= MIN_RECORD_SIZE) {
             Serial.println();
             Serial.println("Recorded data: ");
-            for (size_t i = 0; i < index; ++i) {
+            for (size_t i = 0; i < recordIndex; ++i) {
               print(record[i].time, &record[i].sensor[0], 12);
               record[i] = Record();
             }
@@ -461,6 +494,7 @@ void loop() {
               Serial.println("Data sent over BLE");
             }
           }
+          recordIndex = 0;
           frequency[0] = frequency[1] / frequency[2];
         }
       }
