@@ -6,6 +6,24 @@
 #include <DFRobot_BMX160.h>
 #include <DFRobot_BMP3XX.h>
 
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEServer.h>
+#include <BLE2904.h>
+#include "jamBLE.h"
+
+#include <ArduinoJson.h>
+
+#define BLE_SERVICE_UUID                    "1460dde-f478-4f30-8310-1dfb60c57290"
+#define BLE_CHUNKCOUNT_CHARACTERISTIC_UUID  "a23d6b3b-9eaa-43ab-8e9f-e124f37acac0"
+#define BLE_CHUNK_CHARACTERISTIC_UUID       "b9b80d41-458d-420b-92a6-74da115aa7bb"
+
+BLEServer *bleServer;
+BLECharacteristic *countCharacteristic;
+BLECharacteristic *chunkCharacteristic;
+jamBLEChunkServiceServer bleChunkService;
+static bool bleClientConnected = false;
+
 DFRobot_BMX160 bmx160;
 DFRobot_BMP388_I2C bmp388(&Wire, bmp388.eSDOGND);
 
@@ -24,15 +42,30 @@ enum class Mode {
 };
 
 const int STOP_THRESHOLD_LIMIT = 10;
-const int RECORD_BUFFER_SIZE = 3600;
+const int RECORD_BUFFER_SIZE = 800;
 const int MIN_RECORD_SIZE = 50;
 
 WebServer webserver(80);
 Mode mode = Mode::record;
 Record record[RECORD_BUFFER_SIZE];
 bool powermode = false;
+bool bmp388_ok = true;
 int frequency[3] = { 100, 100, 10 };                 // [0] = current, [1] = target, [2] = divider
 float sensitivity[4] = { 16384.0, 16.4, 1, 0.005 };  // [0] = accel, [1] = gyro, [2] = mag, [3] = record
+
+
+// BLE server callbacks, used to track if client is connected or not
+class BLEServerCallback : public BLEServerCallbacks {
+  void onConnect(BLEServer *server) {
+    Serial.println("A client has connected");
+    bleClientConnected = true;
+  }
+
+  void onDisconnect(BLEServer *server) {
+    Serial.println("A client has disconnected");
+    bleClientConnected = false;
+  }
+};
 
 const char* serverIndex = R"rawliteral(
 <style>
@@ -86,11 +119,29 @@ const char* serverIndex = R"rawliteral(
 void setup() {
   delay(1000);
   Serial.begin(921600);
-  Wire.begin(5, 4);
+  Wire.begin(21, 22);
 
   delay(100);
-  if (bmp388.begin() != 0) Serial.println("bmp388 Initialization failed");
+  if (bmp388.begin() != 0) {
+    Serial.println("bmp388 Initialization failed");
+    bmp388_ok = false;
+  } 
   if (!bmx160.begin()) Serial.println("bmx160 Initialization failed");
+
+  // Start BLE server and setup chunk service using jamBLE
+  BLEDevice::init("DiscThingy");
+  bleServer = BLEDevice::createServer();
+  bleServer->setCallbacks(new BLEServerCallback());
+  //bleChunkService.setChunkCountCharacteristicUUID(BLE_CHUNKCOUNT_CHARACTERISTIC_UUID);
+  //bleChunkService.setChunkCharacteristicUUID(BLE_CHUNK_CHARACTERISTIC_UUID);
+  //bleChunkService.setup(bleServer, BLE_SERVICE_UUID);
+
+  // Setup BLE advertising, will be started in loop method if a client is not connected
+  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+  pAdvertising->addServiceUUID(BLE_SERVICE_UUID);
+  pAdvertising->setScanResponse(true);
+  pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
+  pAdvertising->setMinPreferred(0x12);
 
   delay(100);
   calibrate(100);
@@ -230,9 +281,11 @@ void getSensors(float* sensor, const float* offset, const float* sensitivity) {
     sensor[i * 3 + 2] = (imu[i].z - offset[i * 3 + 2]) / sensitivity[i];
   }
 
-  sensor[9] = bmp388.readTempC();
-  sensor[10] = bmp388.readPressPa();
-  sensor[11] = bmp388.readAltitudeM();
+  if (bmp388_ok) {
+    sensor[9] = bmp388.readTempC();
+    sensor[10] = bmp388.readPressPa();
+    sensor[11] = bmp388.readAltitudeM();
+  }
 }
 
 void print(unsigned long time, float* sensor, size_t sensorSize) {
@@ -318,6 +371,44 @@ bool shouldRecord(const float* sensor, const float* offset, const float* sensiti
   return (diffX > sensitivity[3] || diffY > sensitivity[3] || diffZ > sensitivity[3]);
 }
 
+JsonDocument generateReport() {
+  Serial.println("Generating report of recorded data in JSON format...");
+  JsonDocument report;
+
+  report["time"] = micros();
+
+  JsonArray data = report.add<JsonArray>();
+
+  for (size_t i = 0; i < RECORD_BUFFER_SIZE; i++) {
+    JsonObject recordData = report.add<JsonObject>();
+    JsonArray magArray = report.add<JsonArray>();
+    JsonArray gyroArray = report.add<JsonArray>();
+    JsonArray accellArray = report.add<JsonArray>();
+
+    magArray.add(record[i].sensor[0]);
+    magArray.add(record[i].sensor[1]);
+    magArray.add(record[i].sensor[2]);
+
+    gyroArray.add(record[i].sensor[3]);
+    gyroArray.add(record[i].sensor[4]);
+    gyroArray.add(record[i].sensor[5]);
+
+    accellArray.add(record[i].sensor[6]);
+    accellArray.add(record[i].sensor[7]);
+    accellArray.add(record[i].sensor[8]);
+
+    recordData["mag"] = magArray;
+    recordData["gyro"] = gyroArray;
+    recordData["accell"] = accellArray;
+    data.add(recordData);
+  }
+
+  report["data"] = data;
+
+  Serial.println("Report generated");
+  return report;
+}
+
 void loop() {
   float imu[12];
   int stopTreshold = 0;
@@ -340,12 +431,15 @@ void loop() {
       getSensors(imu, offset, sensitivity);
       if (index == 0) frequency[0] = frequency[1];
       if (shouldRecord(imu, offset, sensitivity)) {
+        Serial.println("Starting recording...");
         stopTreshold = 0;
         if (index == RECORD_BUFFER_SIZE) index = 0;
         record[index].time = start;
         memcpy(record[index].sensor, imu, sizeof(imu));
         index++;
       } else {
+        Serial.print("Recording, current stop treshold: ");
+        Serial.println(stopTreshold);
         stopTreshold++;
         if (stopTreshold >= STOP_THRESHOLD_LIMIT) {
           if (index >= MIN_RECORD_SIZE) {
@@ -354,6 +448,17 @@ void loop() {
             for (size_t i = 0; i < index; ++i) {
               print(record[i].time, &record[i].sensor[0], 12);
               record[i] = Record();
+            }
+
+            // Debug
+            JsonDocument report = generateReport();
+            serializeJson(report, Serial);
+
+            // Relay the recorded data to a connected client with BLE
+            if (bleClientConnected) {
+              Serial.println("Sending recorded data to connected client over BLE...");
+
+              Serial.println("Data sent over BLE");
             }
           }
           frequency[0] = frequency[1] / frequency[2];
@@ -365,6 +470,9 @@ void loop() {
     default:
       getSensors(sensor, offset, sensitivity);
       print(start, sensor, 12);
+
+      JsonDocument report = generateReport();
+      serializeJson(report, Serial);
       break;
   }
 
@@ -373,5 +481,10 @@ void loop() {
     unsigned long elapsed = end - start;
     unsigned long delay = (1000000 / frequency[1]);
     if (elapsed < delay) delayMicroseconds(delay - elapsed);
+
+    // If no BLE client is connected, start advertising
+    if (!bleClientConnected) {
+      //BLEDevice::startAdvertising();
+    }
   }
 }
