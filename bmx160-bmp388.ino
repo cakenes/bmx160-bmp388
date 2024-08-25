@@ -406,44 +406,6 @@ JsonDocument generateReport() {
   return report;
 }
 
-JsonDocument generateReport() {
-  Serial.println("Generating report of recorded data in JSON format...");
-  JsonDocument report;
-
-  report["time"] = micros();
-
-  JsonArray data = report.add<JsonArray>();
-
-  for (size_t i = 0; i < RECORD_BUFFER_SIZE; i++) {
-    JsonObject recordData = report.add<JsonObject>();
-    JsonArray magArray = report.add<JsonArray>();
-    JsonArray gyroArray = report.add<JsonArray>();
-    JsonArray accellArray = report.add<JsonArray>();
-
-    magArray.add(record[i].sensor[0]);
-    magArray.add(record[i].sensor[1]);
-    magArray.add(record[i].sensor[2]);
-
-    gyroArray.add(record[i].sensor[3]);
-    gyroArray.add(record[i].sensor[4]);
-    gyroArray.add(record[i].sensor[5]);
-
-    accellArray.add(record[i].sensor[6]);
-    accellArray.add(record[i].sensor[7]);
-    accellArray.add(record[i].sensor[8]);
-
-    recordData["mag"] = magArray;
-    recordData["gyro"] = gyroArray;
-    recordData["accell"] = accellArray;
-    data.add(recordData);
-  }
-
-  report["data"] = data;
-
-  Serial.println("Report generated");
-  return report;
-}
-
 void loop() {
   float imu[12];
   unsigned long start = micros();
