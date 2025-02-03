@@ -16,3 +16,5 @@ sensitivity <accel as float> <gyro as float> <mag as float> <record as float>   
 ### Wifi OTA screen
 
 ![image](https://github.com/cakenes/bmx160-bmp388/assets/25346075/6b132bfd-49a8-4334-a261-514e085df297)
+
+![poc](poc.gif)
